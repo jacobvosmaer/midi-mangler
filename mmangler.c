@@ -6,9 +6,6 @@ void uart_init(void) {
 	UBRR1H = ubrr >> 8;
 	UBRR1L = ubrr & 0xff;
 	UCSR1B = _BV(RXEN1) | _BV(TXEN1);
-
-	/* Enable pull-up resistor on RX pin */
-	PORTD |= _BV(PORTD2);
 }
 
 void uart_tx(uint8_t c) {
@@ -28,12 +25,21 @@ uint8_t uart_read(uint8_t *c) {
 
 int main(void) {
 	uint8_t b;
+	uint8_t i;
+
+	DDRB |= _BV(PORTB0);
 
 	uart_init();
 
-	while (1) {
+	for (i = 0;; i++) {
 		if (uart_read(&b))
 			uart_tx(b);
+
+		if (i & _BV(6)) {
+			PORTB |= _BV(PORTB0);
+		} else {
+			PORTB &= ~_BV(PORTB0);
+		}
 	}
 
 	return 0;
