@@ -1,5 +1,5 @@
 PRG            = mmangler
-OBJ            = mmangler.o midi.o
+OBJ            = mmangler.o midi.o pin.o
 
 MCU_TARGET     = atmega32u4
 OPTIMIZE       = -Os -flto

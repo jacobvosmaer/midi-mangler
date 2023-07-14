@@ -1,3 +1,4 @@
+#include "pin.h"
 #include <avr/io.h>
 #include <util/delay.h>
 
@@ -9,7 +10,8 @@ void uart_init(void) {
 }
 
 void uart_tx(uint8_t c) {
-	loop_until_bit_is_set(UCSR1A, UDRE1);
+	while (!(UCSR1A & (1 << UDRE1)))
+		;
 	UDR1 = c;
 }
 
@@ -23,11 +25,12 @@ uint8_t uart_read(uint8_t *c) {
 	return !(status & (_BV(FE1) | _BV(DOR1) | _BV(UPE1)));
 }
 
-int main(void) {
-	uint8_t b;
-	uint8_t i;
+pin yellow = {&PORTB, &DDRB, PORTB0};
 
-	DDRB |= _BV(PORTB0);
+int main(void) {
+	uint8_t b, i;
+
+	pin_init(&yellow);
 
 	uart_init();
 
@@ -35,11 +38,7 @@ int main(void) {
 		if (uart_read(&b))
 			uart_tx(b);
 
-		if (i & _BV(6)) {
-			PORTB |= _BV(PORTB0);
-		} else {
-			PORTB &= ~_BV(PORTB0);
-		}
+		pin_set(&yellow, i & (1 << 6));
 	}
 
 	return 0;
