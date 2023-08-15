@@ -1,3 +1,4 @@
+#include "midi.h"
 #include "pin.h"
 #include <avr/io.h>
 #include <util/delay.h>
@@ -28,17 +29,18 @@ uint8_t uart_read(uint8_t *c) {
 pin yellow = {&PORTB, &DDRB, PORTB0};
 
 int main(void) {
-	uint8_t b, i;
+	uint8_t b;
+	midi_parser parser = {0};
+	midi_message msg = {0};
 
 	pin_init(&yellow);
 
 	uart_init();
 
-	for (i = 0;; i++) {
-		if (uart_read(&b))
-			uart_tx(b);
-
-		pin_set(&yellow, i & (1 << 6));
+	for (;;) {
+		if (uart_read(&b) && midi_read(&parser, &msg, b) &&
+		    (msg.status == (MIDI_NOTE_ON | 2)) && !msg.data[1])
+			pin_set(&yellow, 0);
 	}
 
 	return 0;
