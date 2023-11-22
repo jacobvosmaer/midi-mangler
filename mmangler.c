@@ -33,8 +33,12 @@ int main(void) {
 	int i;
 	uart_init();
 
-	for (i = 0; i < (int)sizeof(data); i++)
+	for (i = 0; i < (int)sizeof(data); i++) {
+		unsigned char c = data[i];
+		if (c == 0xf8)
+			_delay_ms(21); /* MIDI clock 118 BPM, 24 PPQ */
 		uart_tx(data[i]);
+	}
 	while (1)
 		;
 }
