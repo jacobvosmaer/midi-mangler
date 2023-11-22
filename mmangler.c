@@ -1,3 +1,4 @@
+#include "data.h"
 #include "midi.h"
 #include "pin.h"
 #include <avr/io.h>
@@ -29,19 +30,11 @@ uint8_t uart_read(uint8_t *c) {
 pin yellow = {&PORTB, &DDRB, PORTB0};
 
 int main(void) {
-	uint8_t b;
-	midi_parser parser = {0};
-	midi_message msg = {0};
-
-	pin_init(&yellow);
-
+	int i;
 	uart_init();
 
-	for (;;) {
-		if (uart_read(&b) && midi_read(&parser, &msg, b) &&
-		    (msg.status == (MIDI_NOTE_ON | 2)) && !msg.data[1])
-			pin_set(&yellow, 0);
-	}
-
-	return 0;
+	for (i = 0; i < (int)sizeof(data); i++)
+		uart_tx(data[i]);
+	while (1)
+		;
 }
