@@ -1,0 +1,3 @@
+[submodule "midiparser"]
+	path = midiparser
+	url = https://gitlab.com/jacobvosmaer/midiparser.git

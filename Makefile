@@ -12,13 +12,17 @@ CC             = avr-gcc
 
 # Override is only needed by avr-lib build system.
 
-override CFLAGS        = -g -Wall -Wextra -Werror $(OPTIMIZE) -std=gnu89 -pedantic -mmcu=$(MCU_TARGET) $(DEFS)
+override CFLAGS        = -g -Wall -Wextra -Werror $(OPTIMIZE) -std=gnu89 -pedantic -mmcu=$(MCU_TARGET) $(DEFS) -Imidiparser
 override LDFLAGS       = -Wl,-Map,$(PRG).map
 
 OBJCOPY        = avr-objcopy
 OBJDUMP        = avr-objdump
 
 all: $(PRG).elf lst text
+
+midi.o: midiparser/midi.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
 
 $(PRG).elf: $(OBJ)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LIBS)
