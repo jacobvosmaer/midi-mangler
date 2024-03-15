@@ -68,13 +68,13 @@ struct {
 } tx81z;
 
 void tx81zparameter(int dir) {
-	uint8_t i, msg[7] = {0xf0, 0x43, 0x10, 0x10, 0, 0, 0xf7};
+	uint8_t i, msg[7] = {0xf0, 0x43, 0, 0x13, 0, 0, 0xf7};
 
 	if (!dir)
 		return;
 
-	msg[2] |= tx81z.channel & 0xf;
-	msg[4] = dir > 0 ? 70 : 69;
+	msg[2] = 0x10 | (tx81z.channel & 0xf);
+	msg[4] = dir > 0 ? 72 : 71;
 	msg[5] = 0x7f;
 	for (i = 0; i < nelem(msg); i++)
 		uart_tx(msg[i]);
@@ -93,17 +93,7 @@ int main(void) {
 
 	while (1) {
 		uint8_t delta = TCNT0 - time;
-		int enc = encoder_debounce(delta);
 		time += delta;
-
-		if (enc > 0) {
-			uart_tx(0x90);
-			uart_tx(0x7f);
-			uart_tx(0x7f);
-		} else if (enc < 0) {
-			uart_tx(0x90);
-			uart_tx(0);
-			uart_tx(0x7f);
-		}
+		tx81zparameter(encoder_debounce(delta));
 	}
 }
