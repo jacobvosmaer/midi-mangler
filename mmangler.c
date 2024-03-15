@@ -32,8 +32,8 @@ pin yellow = {&PORTB, &DDRB, PORTB0}, green = {&PORTD, &DDRD, PORTB5};
 
 struct {
 	volatile uint8_t *const port, *const ddr, *const pin;
-	uint8_t bit[2], debounce[2];
-} encoder = {&PORTD, &DDRD, &PIND, {PORTD0, PORTD1}, {0}};
+	uint8_t bit[2], debounce[2], elapsed;
+} encoder = {&PORTD, &DDRD, &PIND, {PORTD0, PORTD1}, {0}, 0};
 
 void encoder_init(void) {
 	uint8_t mask = (1 << encoder.bit[0]) | (1 << encoder.bit[1]);
@@ -42,17 +42,20 @@ void encoder_init(void) {
 }
 
 int encoder_debounce(uint8_t delta) {
-	int i,a,b;
-	if (!delta)
+	int i, a, b;
+
+	encoder.elapsed += delta;
+	if (encoder.elapsed < 16)
 		return 0;
+	encoder.elapsed = 0;
 
 	for (i = 0; i < nelem(encoder.debounce); i++)
 		encoder.debounce[i] = (encoder.debounce[i] << 1) |
 				      !!(*encoder.pin & (1 << encoder.bit[i]));
 
-a=encoder.debounce[0]&3;
-b=encoder.debounce[1]&3;
-return (a==0 && b ==2 )  -(a ==2 && b ==0);
+	a = encoder.debounce[0] & 3;
+	b = encoder.debounce[1] & 3;
+	return (a == 1 && b == 0) - (a == 2 && b == 0);
 }
 
 void timer_init(void) {
@@ -60,7 +63,28 @@ void timer_init(void) {
 	TCCR0B = 1 << CS02 | 1 << CS00;
 }
 
+struct {
+	uint8_t channel;
+} tx81z;
+
+void tx81zparameter(int dir) {
+	uint8_t i, msg[7] = {0xf0, 0x43, 0x10, 0x10, 0, 0, 0xf7};
+
+	if (!dir)
+		return;
+
+	msg[2] |= tx81z.channel & 0xf;
+	msg[4] = dir > 0 ? 70 : 69;
+	msg[5] = 0x7f;
+	for (i = 0; i < nelem(msg); i++)
+		uart_tx(msg[i]);
+	msg[5] = 0;
+	for (i = 0; i < nelem(msg); i++)
+		uart_tx(msg[i]);
+}
+
 int main(void) {
+	uint8_t time = 0;
 	uart_init();
 	timer_init();
 	encoder_init();
@@ -68,7 +92,18 @@ int main(void) {
 	pin_init(&green);
 
 	while (1) {
-		pin_set(&yellow, PIND & 0x1);
-		pin_set(&green, PIND & 0x2);
+		uint8_t delta = TCNT0 - time;
+		int enc = encoder_debounce(delta);
+		time += delta;
+
+		if (enc > 0) {
+			uart_tx(0x90);
+			uart_tx(0x7f);
+			uart_tx(0x7f);
+		} else if (enc < 0) {
+			uart_tx(0x90);
+			uart_tx(0);
+			uart_tx(0x7f);
+		}
 	}
 }
