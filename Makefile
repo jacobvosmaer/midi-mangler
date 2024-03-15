@@ -76,7 +76,7 @@ esrec: $(PRG)_eeprom.srec
 format:
 	clang-format -i -style=file *.c *.h
 
-AVRDUDE_PORT ?= /dev/tty.usbmodem*
+AVRDUDE_PORT ?= /dev/tty.usbmodem1112401
 upload: all
 	ls /dev/|grep usbmodem
 	stty -f $(AVRDUDE_PORT) 1200
