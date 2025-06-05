@@ -65,7 +65,6 @@ void timer_init(void) {
 
 int notes[128];
 
-#define PITCHMIN 0 /* A low C# */
 #define PITCHMAX 6912
 
 uint8_t sysex[274] = {0xf0, 0x43, 0,   0x7e, 0x02, 0x0a, 'L', 'M',
@@ -74,10 +73,10 @@ uint8_t sysex[274] = {0xf0, 0x43, 0,   0x7e, 0x02, 0x0a, 'L', 'M',
 void retune(int octave) {
 	int i;
 	uint8_t checksum;
+	float step = (float)octave / 12.0;
 
-	/* Start at note 1 because that is a C# and pitch 0 is a C#. */
-	for (i = 1; i < nelem(notes); i++) {
-		notes[i] = (float)i * (float)octave / (float)12.0;
+	for (i = 0; i < nelem(notes); i++) {
+		notes[i] = (float)i * step;
 		while (notes[i] > PITCHMAX)
 			notes[i] -= octave;
 	}
@@ -108,9 +107,8 @@ int main(void) {
 	retune(octave);
 	while (1) {
 		uint8_t delta = TCNT0 - time;
-		int dir;
+		int dir = encoder_debounce(delta);
 		time += delta;
-		dir = encoder_debounce(delta);
 		if (dir) {
 			octave += 3 * dir;
 			retune(octave);
