@@ -73,12 +73,14 @@ uint8_t sysex[274] = {0xf0, 0x43, 0,   0x7e, 0x02, 0x0a, 'L', 'M',
 void retune(int octave) {
 	int i;
 	uint8_t checksum;
-	float step = (float)octave / 12.0;
+	float step = (float)octave / 12.0, shift = 72.0 * (64.0 - step);
 
 	for (i = 0; i < nelem(notes); i++) {
-		notes[i] = (float)i * step;
+		notes[i] = shift + (float)i * step;
 		while (notes[i] > PITCHMAX)
 			notes[i] -= octave;
+		while (notes[i] < 0)
+			notes[i] += octave;
 	}
 
 	/* sysex[2] = deviceno - 1; */
