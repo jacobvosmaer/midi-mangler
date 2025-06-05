@@ -63,27 +63,41 @@ void timer_init(void) {
 	TCCR0B = 1 << CS02 | 1 << CS00;
 }
 
-struct {
-	uint8_t channel;
-} tx81z;
+int notes[128];
 
-void tx81zparameter(int dir) {
-	uint8_t i, msg[7] = {0xf0, 0x43, 0, 0x13, 0, 0, 0xf7};
+#define PITCHMIN 0 /* A low C# */
+#define PITCHMAX 6912
 
-	if (!dir)
-		return;
+uint8_t sysex[274] = {0xf0, 0x43, 0,   0x7e, 0x02, 0x0a, 'L', 'M',
+		      ' ',  ' ',  'M', 'C',  'R',  'T',	 'E', '1'};
 
-	msg[2] = 0x10 | (tx81z.channel & 0xf);
-	msg[4] = dir > 0 ? 72 : 71;
-	msg[5] = 0x7f;
-	for (i = 0; i < nelem(msg); i++)
-		uart_tx(msg[i]);
-	msg[5] = 0;
-	for (i = 0; i < nelem(msg); i++)
-		uart_tx(msg[i]);
+void retune(int octave) {
+	int i;
+	uint8_t checksum;
+
+	/* Start at note 1 because that is a C# and pitch 0 is a C#. */
+	for (i = 1; i < nelem(notes); i++) {
+		notes[i] = (float)i * (float)octave / (float)12.0;
+		while (notes[i] > PITCHMAX)
+			notes[i] -= octave;
+	}
+
+	/* sysex[2] = deviceno - 1; */
+	for (i = 0; i < 128; i++) {
+		sysex[16 + 2 * i] = notes[i] >> 6;
+		sysex[16 + 2 * i + 1] = notes[i] & ((1 << 6) - 1);
+	}
+	for (i = 6, checksum = 0; i < nelem(sysex) - 2; i++)
+		checksum += sysex[i];
+	sysex[nelem(sysex) - 2] = (0x80 - checksum) & 0x7f;
+	sysex[nelem(sysex) - 1] = 0xf7;
+
+	for (i = 0; i < nelem(sysex); i++)
+		uart_tx(sysex[i]);
 }
 
 int main(void) {
+	int octave = 768;
 	uint8_t time = 0;
 	uart_init();
 	timer_init();
@@ -91,9 +105,15 @@ int main(void) {
 	pin_init(&yellow);
 	pin_init(&green);
 
+	retune(octave);
 	while (1) {
 		uint8_t delta = TCNT0 - time;
+		int dir;
 		time += delta;
-		tx81zparameter(encoder_debounce(delta));
+		dir = encoder_debounce(delta);
+		if (dir) {
+			octave += 3 * dir;
+			retune(octave);
+		}
 	}
 }
