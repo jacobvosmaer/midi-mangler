@@ -1,5 +1,3 @@
-#include "midi.h"
-#include "pin.h"
 #include <avr/io.h>
 #include <util/delay.h>
 
@@ -27,8 +25,6 @@ uint8_t uart_read(uint8_t *c) {
 	*c = UDR1;
 	return !(status & (_BV(FE1) | _BV(DOR1) | _BV(UPE1)));
 }
-
-pin yellow = {&PORTB, &DDRB, PORTB0}, green = {&PORTD, &DDRD, PORTB5};
 
 struct {
 	volatile uint8_t *const port, *const ddr, *const pin;
@@ -103,8 +99,6 @@ int main(void) {
 	uart_init();
 	timer_init();
 	encoder_init();
-	pin_init(&yellow);
-	pin_init(&green);
 
 	retune(octave);
 	while (1) {
