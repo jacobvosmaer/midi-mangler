@@ -66,6 +66,10 @@ int notes[128];
 uint8_t sysex[274] = {0xf0, 0x43, 0,   0x7e, 0x02, 0x0a, 'L', 'M',
 		      ' ',  ' ',  'M', 'C',  'R',  'T',	 'E', '1'};
 
+#ifndef DEVICENUMBER
+#define DEVICENUMBER 1
+#endif
+
 void retune(int octave) {
 	int i;
 	uint8_t checksum;
@@ -79,7 +83,7 @@ void retune(int octave) {
 			notes[i] += octave;
 	}
 
-	/* sysex[2] = deviceno - 1; */
+	sysex[2] = DEVICENUMBER - 1;
 	for (i = 0; i < 128; i++) {
 		sysex[16 + 2 * i] = notes[i] >> 6;
 		sysex[16 + 2 * i + 1] = notes[i] & ((1 << 6) - 1);
