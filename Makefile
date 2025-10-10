@@ -4,7 +4,7 @@ OBJ            = mmangler.o midi.o pin.o
 MCU_TARGET     = atmega32u4
 OPTIMIZE       = -Os -flto
 DEFS           = -DF_CPU=16000000L
-LIBS           = -lm
+LIBS           =  
 
 # You should not have to change anything below here.
 

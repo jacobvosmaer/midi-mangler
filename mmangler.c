@@ -1,117 +1,113 @@
+/* velocity mapper */
+#include "midi.h"
 #include <avr/io.h>
 #include <util/delay.h>
-
 #define nelem(x) (int)(sizeof(x) / sizeof(*(x)))
 
 void uart_init(void) {
-	enum { midi_baud = 31250, ubrr = (F_CPU / 16 / midi_baud) - 1 };
-	UBRR1H = ubrr >> 8;
-	UBRR1L = ubrr & 0xff;
-	UCSR1B = _BV(RXEN1) | _BV(TXEN1);
+  enum { midi_baud = 31250, ubrr = (F_CPU / 16 / midi_baud) - 1 };
+  UBRR1H = ubrr >> 8;
+  UBRR1L = ubrr & 0xff;
+  UCSR1B = _BV(RXEN1) | _BV(TXEN1);
 }
 
 void uart_tx(uint8_t c) {
-	while (!(UCSR1A & (1 << UDRE1)))
-		;
-	UDR1 = c;
+  while (!(UCSR1A & (1 << UDRE1)))
+    ;
+  UDR1 = c;
 }
 
-uint8_t uart_read(uint8_t *c) {
-	uint8_t status;
-
-	do
-		status = UCSR1A;
-	while (!(status & _BV(RXC1)));
-	*c = UDR1;
-	return !(status & (_BV(FE1) | _BV(DOR1) | _BV(UPE1)));
+uint8_t uart_rx(uint8_t *c) {
+  uint8_t status = UCSR1A;
+  if (!(status & _BV(RXC1)))
+    return 0;
+  *c = UDR1;
+  return !(status & (_BV(FE1) | _BV(DOR1) | _BV(UPE1)));
 }
 
 struct {
-	volatile uint8_t *const port, *const ddr, *const pin;
-	uint8_t bit[2], debounce[2], elapsed;
+  volatile uint8_t *const port, *const ddr, *const pin;
+  uint8_t bit[2], debounce[2], elapsed;
 } encoder = {&PORTD, &DDRD, &PIND, {PORTD0, PORTD1}, {0}, 0};
 
 void encoder_init(void) {
-	uint8_t mask = (1 << encoder.bit[0]) | (1 << encoder.bit[1]);
-	*encoder.ddr &= ~mask;
-	*encoder.port |= mask;
+  uint8_t mask = (1 << encoder.bit[0]) | (1 << encoder.bit[1]);
+  *encoder.ddr &= ~mask;
+  *encoder.port |= mask;
 }
 
 int encoder_debounce(uint8_t delta) {
-	int i, a, b;
+  int i, a, b;
 
-	encoder.elapsed += delta;
-	if (encoder.elapsed < 16)
-		return 0;
-	encoder.elapsed = 0;
+  encoder.elapsed += delta;
+  if (encoder.elapsed < 16)
+    return 0;
+  encoder.elapsed = 0;
 
-	for (i = 0; i < nelem(encoder.debounce); i++)
-		encoder.debounce[i] = (encoder.debounce[i] << 1) |
-				      !!(*encoder.pin & (1 << encoder.bit[i]));
+  for (i = 0; i < nelem(encoder.debounce); i++)
+    encoder.debounce[i] =
+        (encoder.debounce[i] << 1) | !!(*encoder.pin & (1 << encoder.bit[i]));
 
-	a = encoder.debounce[0] & 3;
-	b = encoder.debounce[1] & 3;
-	return (a == 1 && b == 0) - (a == 2 && b == 0);
+  a = encoder.debounce[0] & 3;
+  b = encoder.debounce[1] & 3;
+  return (a == 1 && b == 0) - (a == 2 && b == 0);
 }
 
 void timer_init(void) {
-	/* Run Timer0 at F_CPU/1024 Hz */
-	TCCR0B = 1 << CS02 | 1 << CS00;
-}
-
-int notes[128];
-
-#define PITCHMAX 6912
-
-uint8_t sysex[274] = {0xf0, 0x43, 0,   0x7e, 0x02, 0x0a, 'L', 'M',
-		      ' ',  ' ',  'M', 'C',  'R',  'T',	 'E', '1'};
-
-#ifndef DEVICENUMBER
-#define DEVICENUMBER 1
-#endif
-
-void retune(int octave) {
-	int i;
-	uint8_t checksum;
-	float step = (float)octave / 12.0, shift = 72.0 * (64.0 - step);
-
-	for (i = 0; i < nelem(notes); i++) {
-		notes[i] = shift + (float)i * step;
-		while (notes[i] > PITCHMAX)
-			notes[i] -= octave;
-		while (notes[i] < 0)
-			notes[i] += octave;
-	}
-
-	sysex[2] = DEVICENUMBER - 1;
-	for (i = 0; i < 128; i++) {
-		sysex[16 + 2 * i] = notes[i] >> 6;
-		sysex[16 + 2 * i + 1] = notes[i] & ((1 << 6) - 1);
-	}
-	for (i = 6, checksum = 0; i < nelem(sysex) - 2; i++)
-		checksum += sysex[i];
-	sysex[nelem(sysex) - 2] = (0x80 - checksum) & 0x7f;
-	sysex[nelem(sysex) - 1] = 0xf7;
-
-	for (i = 0; i < nelem(sysex); i++)
-		uart_tx(sysex[i]);
+  /* Run Timer0 at F_CPU/1024 Hz */
+  TCCR0B = 1 << CS02 | 1 << CS00;
 }
 
 int main(void) {
-	int octave = 768;
-	uint8_t time = 0;
-	uart_init();
-	timer_init();
-	encoder_init();
+  midi_parser mp = {0};
+  uint8_t time = 0, midi_byte, note = 255, noteon = 0;
+  uart_init();
+  timer_init();
+  encoder_init();
 
-	retune(octave);
-	while (1) {
-		uint8_t delta = TCNT0 - time;
-		int dir = encoder_debounce(delta);
-		time += delta;
-		if (dir) {
-			octave += 3 * dir;
-			retune(octave);
-		}
-	}
+  while (1) {
+    uint8_t delta = TCNT0 - time;
+    int dir = encoder_debounce(delta);
+    time += delta;
+    if (dir) {
+      note = note > 127 ? 35 : (note + dir) & 127;
+      uart_tx(MIDI_NOTE_ON); /* TODO use last seen channel? */
+      uart_tx(note);
+      uart_tx(64);
+      uart_tx(note);
+      uart_tx(0);
+      continue;
+    }
+    if (uart_rx(&midi_byte)) {
+      midi_message msg;
+      if (note > 127) {
+        /* echo mode */
+        uart_tx(midi_byte);
+      } else if (msg = midi_read(&mp, midi_byte), msg.status) {
+        /* velocity mapper mode */
+        msg.status &= 0xf0;
+        if (msg.status == MIDI_NOTE_OFF ||
+            (msg.status == MIDI_NOTE_ON && !msg.data[1])) {
+          uart_tx(MIDI_NOTE_OFF);
+          uart_tx(note);
+          uart_tx(msg.data[1]);
+          noteon = 0;
+        } else if (msg.status == MIDI_NOTE_ON) {
+          int velocity = 1, mapstart = 48;
+          if (msg.data[0] >= mapstart)
+            velocity += (msg.data[0] - mapstart) * 5;
+          if (velocity > 127)
+            velocity = 127;
+          uart_tx(MIDI_NOTE_ON);
+          if (noteon) { /* prevent overlapping notes */
+            uart_tx(note);
+            uart_tx(0);
+          }
+          uart_tx(note);
+          uart_tx(velocity);
+          noteon = 1;
+        }
+      }
+    }
+  }
 }
