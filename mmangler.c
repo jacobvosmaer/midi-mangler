@@ -71,7 +71,7 @@ int main(void) {
     time += delta;
     if (dir) {
       note = note > 127 ? 35 : (note + dir) & 127;
-      uart_tx(MIDI_NOTE_ON); /* TODO use last seen channel? */
+      uart_tx(MIDI_NOTE_ON); /* from now on use running status */
       uart_tx(note);
       uart_tx(64);
       uart_tx(note);
@@ -88,9 +88,8 @@ int main(void) {
         msg.status &= 0xf0;
         if (msg.status == MIDI_NOTE_OFF ||
             (msg.status == MIDI_NOTE_ON && !msg.data[1])) {
-          uart_tx(MIDI_NOTE_OFF);
           uart_tx(note);
-          uart_tx(msg.data[1]);
+          uart_tx(0);
           noteon = 0;
         } else if (msg.status == MIDI_NOTE_ON) {
           int velocity = 1, mapstart = 48;
@@ -98,7 +97,6 @@ int main(void) {
             velocity += (msg.data[0] - mapstart) * 5;
           if (velocity > 127)
             velocity = 127;
-          uart_tx(MIDI_NOTE_ON);
           if (noteon) { /* prevent overlapping notes */
             uart_tx(note);
             uart_tx(0);
