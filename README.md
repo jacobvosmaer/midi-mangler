@@ -15,10 +15,7 @@ as a line driver. I'm not really sure that the SN74HC08 is needed now
 that I look at it but it's there.
 
 Besides the MIDI I/O, there is a rotary encoder attached to the GPIO
-of the MCU and a switch connected to the MCU reset pin. There is a
-reset button on the Pro Micro itself but I wanted to be able to
-reprogram the device without opening it up all the time so I added the
-outside switch.
+of the MCU and a switch connected to the MCU reset pin.
 
 ![Photo of the inside of the hardware](midi-mangler.jpeg)
 
