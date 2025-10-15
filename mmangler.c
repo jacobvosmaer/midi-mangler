@@ -53,14 +53,21 @@ int encoder_debounce(uint8_t delta) {
   return (a == 1 && b == 0) - (a == 2 && b == 0);
 }
 
+int button_debounce(uint8_t delta) {
+  (void)delta;
+  return 0;
+}
+
 void timer_init(void) {
   /* Run Timer0 at F_CPU/1024 Hz */
   TCCR0B = 1 << CS02 | 1 << CS00;
 }
 
+enum mode { ECHO, VELOCITY, MICROTUNE, NMODE };
 int main(void) {
   midi_parser mp = {0};
-  uint8_t time = 0, midi_byte, note = 255, noteon = 0;
+  uint8_t time = 0, midi_byte, note = 36, noteon = 0;
+  enum mode mode = ECHO;
   uart_init();
   timer_init();
   encoder_init();
@@ -68,26 +75,28 @@ int main(void) {
   while (1) {
     uint8_t delta = TCNT0 - time;
     int dir = encoder_debounce(delta);
+    mode = (mode + button_debounce(delta)) % NMODE;
     time += delta;
-    if (dir) {
-      note = note > 127 ? 35 : (note + dir) & 127;
-      uart_tx(MIDI_NOTE_ON); /* from now on use running status */
-      uart_tx(note);
-      uart_tx(64);
-      uart_tx(note);
-      uart_tx(0);
-      continue;
-    }
-    if (uart_rx(&midi_byte)) {
-      midi_message msg;
-      if (note > 127) {
-        /* echo mode */
+    if (mode == ECHO) {
+      if (uart_rx(&midi_byte))
         uart_tx(midi_byte);
-      } else if (msg = midi_read(&mp, midi_byte), msg.status) {
-        /* velocity mapper mode */
+    } else if (mode == VELOCITY) {
+      midi_message msg;
+      if (dir) {
+        note = (note + dir) & 127;
+        uart_tx(MIDI_NOTE_ON);
+        uart_tx(note);
+        uart_tx(64);
+        uart_tx(note);
+        uart_tx(0);
+      }
+      if (!uart_rx(&midi_byte))
+        continue;
+      if (msg = midi_read(&mp, midi_byte), msg.status) {
         msg.status &= 0xf0;
         if (msg.status == MIDI_NOTE_OFF ||
             (msg.status == MIDI_NOTE_ON && !msg.data[1])) {
+          uart_tx(MIDI_NOTE_ON);
           uart_tx(note);
           uart_tx(0);
           noteon = 0;
@@ -97,6 +106,7 @@ int main(void) {
             velocity += (msg.data[0] - mapstart) * 5;
           if (velocity > 127)
             velocity = 127;
+          uart_tx(MIDI_NOTE_ON);
           if (noteon) { /* prevent overlapping notes */
             uart_tx(note);
             uart_tx(0);
@@ -106,6 +116,7 @@ int main(void) {
           noteon = 1;
         }
       }
+    } else if (mode == MICROTUNE) {
     }
   }
 }
