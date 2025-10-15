@@ -54,6 +54,8 @@ int encoder_debounce(uint8_t delta) {
 }
 
 int button_debounce(uint8_t delta) {
+  /* TODO: Connect encoder button press pins to MCU GPIO, debounce the signal in
+   * this routine. Use this as a mode switch. */
   (void)delta;
   return 0;
 }
