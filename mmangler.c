@@ -63,16 +63,20 @@ void timer_init(void) {
   TCCR0B = 1 << CS02 | 1 << CS00;
 }
 
+int8_t tune[128];
+#define TUNESHIFT 5
+
 enum mode { ECHO, VELOCITY, MICROTUNE, NMODE };
 int main(void) {
   midi_parser mp = {0};
-  uint8_t time = 0, midi_byte, note = 36, noteon = 0;
-  enum mode mode = ECHO;
+  uint8_t time = 0, midi_byte, note = 36, noteon = 0, lastnote = 0;
+  enum mode mode = MICROTUNE;
   uart_init();
   timer_init();
   encoder_init();
 
   while (1) {
+    midi_message msg;
     uint8_t delta = TCNT0 - time;
     int dir = encoder_debounce(delta);
     mode = (mode + button_debounce(delta)) % NMODE;
@@ -81,7 +85,6 @@ int main(void) {
       if (uart_rx(&midi_byte))
         uart_tx(midi_byte);
     } else if (mode == VELOCITY) {
-      midi_message msg;
       if (dir) {
         note = (note + dir) & 127;
         uart_tx(MIDI_NOTE_ON);
@@ -117,6 +120,36 @@ int main(void) {
         }
       }
     } else if (mode == MICROTUNE) {
+      if (dir) {
+        int8_t *t = tune + lastnote;
+        *t += dir;
+        if (*t == (1 << TUNESHIFT))
+          (*t)--;
+        else if (*t == -(1 << TUNESHIFT))
+          (*t)++;
+      }
+      if (!uart_rx(&midi_byte))
+        continue;
+      if (msg = midi_read(&mp, midi_byte), msg.status) {
+        msg.status &= 0xf0;
+        if (msg.status == MIDI_NOTE_OFF ||
+            (msg.status == MIDI_NOTE_ON && !msg.data[1])) {
+          uart_tx(MIDI_NOTE_OFF);
+          uart_tx(msg.data[0]);
+          uart_tx(0);
+          noteon = 0;
+        } else if (msg.status == MIDI_NOTE_ON) {
+          uint16_t pitchbend =
+              8192 + ((int16_t)tune[msg.data[0]] << (13 - TUNESHIFT));
+          lastnote = msg.data[0];
+          uart_tx(MIDI_PITCH_BEND);
+          uart_tx(pitchbend & 127);
+          uart_tx(pitchbend >> 7);
+          uart_tx(MIDI_NOTE_ON);
+          uart_tx(msg.data[0]);
+          uart_tx(msg.data[1]);
+        }
+      }
     }
   }
 }
