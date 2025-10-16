@@ -72,10 +72,8 @@ int button_debounce(uint8_t delta) {
   return button.debounce == 0x80;
 }
 
-void timer_init(void) {
-  /* Run Timer0 at F_CPU/1024 Hz */
-  TCCR0B = 1 << CS02 | 1 << CS00;
-}
+/* Run Timer0 at F_CPU/1024 Hz */
+void timer_init(void) { TCCR0B = 1 << CS02 | 1 << CS00; }
 
 int8_t tune[128];
 #define TUNESHIFT 5
@@ -138,10 +136,7 @@ int main(void) {
       if (dir) {
         int8_t *t = tune + lastnote;
         *t += dir;
-        if (*t == (1 << TUNESHIFT))
-          (*t)--;
-        else if (*t == -(1 << TUNESHIFT))
-          (*t)++;
+        *t += (*t == -(1 << TUNESHIFT)) - (*t == (1 << TUNESHIFT));
       }
       if (!uart_rx(&midi_byte))
         continue;
@@ -152,7 +147,6 @@ int main(void) {
           uart_tx(MIDI_NOTE_OFF);
           uart_tx(msg.data[0]);
           uart_tx(0);
-          noteon = 0;
         } else if (msg.status == MIDI_NOTE_ON) {
           uint16_t pitchbend =
               8192 + ((int16_t)tune[msg.data[0]] << (13 - TUNESHIFT));
