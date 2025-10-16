@@ -53,11 +53,23 @@ int encoder_debounce(uint8_t delta) {
   return (a == 1 && b == 0) - (a == 2 && b == 0);
 }
 
+struct {
+  volatile uint8_t *const port, *const ddr, *const pin;
+  uint8_t bit, debounce;
+} button = {&PORTD, &DDRD, &PIND, 1 << PORTD4, 0};
+
+void button_init(void) {
+  *button.ddr &= ~button.bit;
+  *button.port |= button.bit;
+}
+
 int button_debounce(uint8_t delta) {
-  /* TODO: Connect encoder button press pins to MCU GPIO, debounce the signal in
-   * this routine. Use this as a mode switch. */
-  (void)delta;
-  return 0;
+  if (!delta)
+    return 0;
+  button.debounce = (button.debounce << 1) | !!(*button.pin & button.bit);
+  /* The GPIO is held high by a pull-up resistor and the button shorts it to
+   * ground. The button is pressed when the GPIO reads 0. */
+  return button.debounce == 0x80;
 }
 
 void timer_init(void) {
@@ -72,10 +84,11 @@ enum mode { ECHO, VELOCITY, MICROTUNE, NMODE };
 int main(void) {
   midi_parser mp = {0};
   uint8_t time = 0, midi_byte, note = 36, noteon = 0, lastnote = 0;
-  enum mode mode = MICROTUNE;
+  enum mode mode = ECHO;
   uart_init();
   timer_init();
   encoder_init();
+  button_init();
 
   while (1) {
     midi_message msg;
