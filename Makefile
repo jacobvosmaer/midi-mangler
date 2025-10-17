@@ -1,5 +1,5 @@
 PRG            = mmangler
-OBJ            = mmangler.o midi.o pin.o
+OBJ            = mmangler.o midiparser/midi.o pin.o
 
 CC = avr-gcc
 override CPPFLAGS = -Imidiparser -DF_CPU=16000000L
@@ -13,10 +13,7 @@ OBJDUMP        = avr-objdump
 
 all: $(PRG).hex $(PRG).lst
 
-midi.o: midiparser/midi.c
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c -o $@ $^
-
-$(PRG): midi.o
+$(PRG): midiparser/midi.o
 
 clean:
 	rm -rf -- $(OBJ) $(PRG) $(PRG).lst $(PRG).map $(PRG).hex
