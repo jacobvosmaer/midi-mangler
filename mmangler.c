@@ -92,7 +92,7 @@ enum mode { ECHO, VELOCITY, MICROTUNE, COMPRESS, NMODE };
 int main(void) {
   midi_parser mp = {0};
   uint8_t time = 0, midi_byte;
-  enum mode mode = COMPRESS;
+  enum mode mode = ECHO;
   uart_init();
   timer_init();
   encoder_init();
