@@ -1,77 +1,31 @@
 PRG            = mmangler
 OBJ            = mmangler.o midi.o pin.o
 
-MCU_TARGET     = atmega32u4
-OPTIMIZE       = -Os -flto
-DEFS           = -DF_CPU=16000000L
-LIBS           =  
-
-# You should not have to change anything below here.
-
-CC             = avr-gcc
-
-# Override is only needed by avr-lib build system.
-
-override CFLAGS        = -g -Wall -Wextra -Werror $(OPTIMIZE) -std=gnu89 -pedantic -mmcu=$(MCU_TARGET) $(DEFS) -Imidiparser
-override LDFLAGS       = -Wl,-Map,$(PRG).map
+CC = avr-gcc
+override CPPFLAGS = -Imidiparser -DF_CPU=16000000L
+override CFLAGS = -g -Wall -Wextra -Werror -Os -flto -std=gnu89 -pedantic
+override TARGET_ARCH = -mmcu=atmega32u4
+override LDFLAGS = -Wl,-Map,$(PRG).map
+override LDLIBS = 
 
 OBJCOPY        = avr-objcopy
 OBJDUMP        = avr-objdump
 
-all: $(PRG).elf lst text
+all: $(PRG).bin $(PRG).lst
 
 midi.o: midiparser/midi.c
-	$(CC) $(CFLAGS) -c -o $@ $^
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c -o $@ $^
 
-
-$(PRG).elf: $(OBJ)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LIBS)
+$(PRG): midi.o
 
 clean:
-	rm -rf *.o $(PRG).elf *.eps *.png *.pdf *.bak 
-	rm -rf *.lst *.map $(EXTRA_CLEAN_FILES)
+	rm -rf -- $(OBJ) $(PRG) $(PRG).lst $(PRG).map $(PRG).bin
 
-lst:  $(PRG).lst
-
-%.lst: %.elf
+%.lst: %
 	$(OBJDUMP) -h -S $< > $@
 
-# Rules for building the .text rom images
-
-text: hex bin srec
-
-hex:  $(PRG).hex
-bin:  $(PRG).bin
-srec: $(PRG).srec
-
-%.hex: %.elf
-	$(OBJCOPY) -j .text -j .data -O ihex $< $@
-
-%.srec: %.elf
-	$(OBJCOPY) -j .text -j .data -O srec $< $@
-
-%.bin: %.elf
+%.bin: %
 	$(OBJCOPY) -j .text -j .data -O binary $< $@
-
-# Rules for building the .eeprom rom images
-
-eeprom: ehex ebin esrec
-
-ehex:  $(PRG)_eeprom.hex
-ebin:  $(PRG)_eeprom.bin
-esrec: $(PRG)_eeprom.srec
-
-%_eeprom.hex: %.elf
-	$(OBJCOPY) -j .eeprom --change-section-lma .eeprom=0 -O ihex $< $@ \
-	|| { echo empty $@ not generated; exit 0; }
-
-%_eeprom.srec: %.elf
-	$(OBJCOPY) -j .eeprom --change-section-lma .eeprom=0 -O srec $< $@ \
-	|| { echo empty $@ not generated; exit 0; }
-
-%_eeprom.bin: %.elf
-	$(OBJCOPY) -j .eeprom --change-section-lma .eeprom=0 -O binary $< $@ \
-	|| { echo empty $@ not generated; exit 0; }
 
 format:
 	clang-format -i -style=file *.c *.h
