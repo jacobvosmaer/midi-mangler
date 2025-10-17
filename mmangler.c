@@ -86,7 +86,6 @@ struct {
 struct {
   uint8_t shift;
 } compress = {64};
-#define BENDSEMI 2
 
 enum mode { ECHO, VELOCITY, MICROTUNE, COMPRESS, NMODE };
 int main(void) {
@@ -171,20 +170,21 @@ int main(void) {
       }
     } else if (mode == COMPRESS) {
       uint8_t note;
+      int16_t bendrange = 2, steps = 6;
       compress.shift = (compress.shift + dir) & 127;
       if (!uart_rx(&midi_byte))
         continue;
       msg = midi_read(&mp, midi_byte);
       msg.status &= 0xf0;
-      note = msg.data[0] / 12 + compress.shift;
+      note = msg.data[0] / steps + compress.shift;
       if (msg.status == MIDI_NOTE_OFF ||
           (msg.status == MIDI_NOTE_ON && !msg.data[1])) {
         uart_tx(msg.status);
         uart_tx(note);
         uart_tx(msg.data[1]);
       } else if (msg.status == MIDI_NOTE_ON) {
-        uint16_t step = 8192 / (12 * BENDSEMI),
-                 bend = 8192 + ((int16_t)msg.data[0] % 12 - 6) * (int16_t)step;
+        uint16_t bend = 8192 + ((int16_t)msg.data[0] % steps - steps / 2) *
+                                   8192 / (steps * bendrange);
         uart_tx(MIDI_PITCH_BEND);
         uart_tx(bend & 127);
         uart_tx(bend >> 7);
