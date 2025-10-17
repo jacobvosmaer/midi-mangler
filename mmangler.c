@@ -82,13 +82,17 @@ struct {
   int8_t tune[128];
   uint8_t lastnote;
 } microtune;
-#define TUNESHIFT 5
+#define MTUNESHIFT 5
+struct {
+  uint8_t shift;
+} compress = {64};
+#define BENDSEMI 2
 
-enum mode { ECHO, VELOCITY, MICROTUNE, NMODE };
+enum mode { ECHO, VELOCITY, MICROTUNE, COMPRESS, NMODE };
 int main(void) {
   midi_parser mp = {0};
   uint8_t time = 0, midi_byte;
-  enum mode mode = ECHO;
+  enum mode mode = COMPRESS;
   uart_init();
   timer_init();
   encoder_init();
@@ -142,7 +146,7 @@ int main(void) {
       if (dir) {
         int8_t *t = microtune.tune + microtune.lastnote;
         *t += dir;
-        *t += (*t == -(1 << TUNESHIFT)) - (*t == (1 << TUNESHIFT));
+        *t += (*t == -(1 << MTUNESHIFT)) - (*t == (1 << MTUNESHIFT));
       }
       if (!uart_rx(&midi_byte))
         continue;
@@ -154,8 +158,8 @@ int main(void) {
           uart_tx(msg.data[0]);
           uart_tx(0);
         } else if (msg.status == MIDI_NOTE_ON) {
-          uint16_t pitchbend =
-              8192 + ((int16_t)microtune.tune[msg.data[0]] << (13 - TUNESHIFT));
+          uint16_t pitchbend = 8192 + ((int16_t)microtune.tune[msg.data[0]]
+                                       << (13 - MTUNESHIFT));
           microtune.lastnote = msg.data[0];
           uart_tx(MIDI_PITCH_BEND);
           uart_tx(pitchbend & 127);
@@ -164,6 +168,29 @@ int main(void) {
           uart_tx(msg.data[0]);
           uart_tx(msg.data[1]);
         }
+      }
+    } else if (mode == COMPRESS) {
+      uint8_t note;
+      compress.shift = (compress.shift + dir) & 127;
+      if (!uart_rx(&midi_byte))
+        continue;
+      msg = midi_read(&mp, midi_byte);
+      msg.status &= 0xf0;
+      note = msg.data[0] / 12 + compress.shift;
+      if (msg.status == MIDI_NOTE_OFF ||
+          (msg.status == MIDI_NOTE_ON && !msg.data[1])) {
+        uart_tx(msg.status);
+        uart_tx(note);
+        uart_tx(msg.data[1]);
+      } else if (msg.status == MIDI_NOTE_ON) {
+        uint16_t step = 8192 / (12 * BENDSEMI),
+                 bend = 8192 + ((int16_t)msg.data[0] % 12 - 6) * (int16_t)step;
+        uart_tx(MIDI_PITCH_BEND);
+        uart_tx(bend & 127);
+        uart_tx(bend >> 7);
+        uart_tx(MIDI_NOTE_ON);
+        uart_tx(note);
+        uart_tx(msg.data[1]);
       }
     }
   }
