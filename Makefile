@@ -1,6 +1,6 @@
 PRG = mmangler
 OBJ = midi.o
-VPATH = .:midiparser
+VPATH = midiparser
 CC = avr-gcc
 OBJCOPY = avr-objcopy
 CPPFLAGS = -Imidiparser -DF_CPU=16000000L
