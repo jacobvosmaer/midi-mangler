@@ -55,7 +55,8 @@ int encoder_debounce(uint8_t delta) {
 
 struct {
   volatile uint8_t *const port, *const ddr, *const pin;
-  uint8_t bit, debounce;
+  uint8_t bit;
+  uint16_t debounce;
 } button = {&PORTD, &DDRD, &PIND, 1 << PORTD4, 0};
 
 void button_init(void) {
@@ -69,7 +70,7 @@ int button_debounce(uint8_t delta) {
   button.debounce = (button.debounce << 1) | !!(*button.pin & button.bit);
   /* The GPIO is held high by a pull-up resistor and the button shorts it to
    * ground. The button is pressed when the GPIO reads 0. */
-  return button.debounce == 0x80;
+  return button.debounce == 0x8000;
 }
 
 /* Run Timer0 at F_CPU/1024 Hz */
