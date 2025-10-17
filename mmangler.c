@@ -39,9 +39,10 @@ void encoder_init(void) {
 int encoder_debounce(uint8_t delta) {
   int i, a, b;
 
-  encoder.elapsed += delta;
-  if (encoder.elapsed < 16)
+  if (delta < 16 - encoder.elapsed) {
+    encoder.elapsed += delta;
     return 0;
+  }
   encoder.elapsed = 0;
 
   for (i = 0; i < nelem(encoder.debounce); i++)
