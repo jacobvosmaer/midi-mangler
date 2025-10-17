@@ -75,13 +75,19 @@ int button_debounce(uint8_t delta) {
 /* Run Timer0 at F_CPU/1024 Hz */
 void timer_init(void) { TCCR0B = 1 << CS02 | 1 << CS00; }
 
-int8_t tune[128];
+struct {
+  uint8_t note, noteon;
+} velocity = {36, 0};
+struct {
+  int8_t tune[128];
+  uint8_t lastnote;
+} microtune;
 #define TUNESHIFT 5
 
 enum mode { ECHO, VELOCITY, MICROTUNE, NMODE };
 int main(void) {
   midi_parser mp = {0};
-  uint8_t time = 0, midi_byte, note = 36, noteon = 0, lastnote = 0;
+  uint8_t time = 0, midi_byte;
   enum mode mode = ECHO;
   uart_init();
   timer_init();
@@ -99,11 +105,11 @@ int main(void) {
         uart_tx(midi_byte);
     } else if (mode == VELOCITY) {
       if (dir) {
-        note = (note + dir) & 127;
+        velocity.note = (velocity.note + dir) & 127;
         uart_tx(MIDI_NOTE_ON);
-        uart_tx(note);
+        uart_tx(velocity.note);
         uart_tx(64);
-        uart_tx(note);
+        uart_tx(velocity.note);
         uart_tx(0);
       }
       if (!uart_rx(&midi_byte))
@@ -113,28 +119,28 @@ int main(void) {
         if (msg.status == MIDI_NOTE_OFF ||
             (msg.status == MIDI_NOTE_ON && !msg.data[1])) {
           uart_tx(MIDI_NOTE_ON);
-          uart_tx(note);
+          uart_tx(velocity.note);
           uart_tx(0);
-          noteon = 0;
+          velocity.noteon = 0;
         } else if (msg.status == MIDI_NOTE_ON) {
-          int velocity = 1, mapstart = 48;
+          int keyvel = 1, mapstart = 48;
           if (msg.data[0] >= mapstart)
-            velocity += (msg.data[0] - mapstart) * 5;
-          if (velocity > 127)
-            velocity = 127;
+            keyvel += (msg.data[0] - mapstart) * 5;
+          if (keyvel > 127)
+            keyvel = 127;
           uart_tx(MIDI_NOTE_ON);
-          if (noteon) { /* prevent overlapping notes */
-            uart_tx(note);
+          if (velocity.noteon) { /* prevent overlapping notes */
+            uart_tx(velocity.note);
             uart_tx(0);
           }
-          uart_tx(note);
-          uart_tx(velocity);
-          noteon = 1;
+          uart_tx(velocity.note);
+          uart_tx(keyvel);
+          velocity.noteon = 1;
         }
       }
     } else if (mode == MICROTUNE) {
       if (dir) {
-        int8_t *t = tune + lastnote;
+        int8_t *t = microtune.tune + microtune.lastnote;
         *t += dir;
         *t += (*t == -(1 << TUNESHIFT)) - (*t == (1 << TUNESHIFT));
       }
@@ -149,8 +155,8 @@ int main(void) {
           uart_tx(0);
         } else if (msg.status == MIDI_NOTE_ON) {
           uint16_t pitchbend =
-              8192 + ((int16_t)tune[msg.data[0]] << (13 - TUNESHIFT));
-          lastnote = msg.data[0];
+              8192 + ((int16_t)microtune.tune[msg.data[0]] << (13 - TUNESHIFT));
+          microtune.lastnote = msg.data[0];
           uart_tx(MIDI_PITCH_BEND);
           uart_tx(pitchbend & 127);
           uart_tx(pitchbend >> 7);
