@@ -118,29 +118,28 @@ int main(void) {
       }
       if (!uart_rx(&midi_byte))
         continue;
-      if (msg = midi_read(&mp, midi_byte), msg.status) {
-        msg.status &= 0xf0;
-        if (msg.status == MIDI_NOTE_OFF ||
-            (msg.status == MIDI_NOTE_ON && !msg.data[1])) {
-          uart_tx(MIDI_NOTE_ON);
+      msg = midi_read(&mp, midi_byte);
+      msg.status &= 0xf0;
+      if (msg.status == MIDI_NOTE_OFF ||
+          (msg.status == MIDI_NOTE_ON && !msg.data[1])) {
+        uart_tx(MIDI_NOTE_ON);
+        uart_tx(velocity.note);
+        uart_tx(0);
+        velocity.noteon = 0;
+      } else if (msg.status == MIDI_NOTE_ON) {
+        int keyvel = 1, mapstart = 48;
+        if (msg.data[0] >= mapstart)
+          keyvel += (msg.data[0] - mapstart) * 5;
+        if (keyvel > 127)
+          keyvel = 127;
+        uart_tx(MIDI_NOTE_ON);
+        if (velocity.noteon) { /* prevent overlapping notes */
           uart_tx(velocity.note);
           uart_tx(0);
-          velocity.noteon = 0;
-        } else if (msg.status == MIDI_NOTE_ON) {
-          int keyvel = 1, mapstart = 48;
-          if (msg.data[0] >= mapstart)
-            keyvel += (msg.data[0] - mapstart) * 5;
-          if (keyvel > 127)
-            keyvel = 127;
-          uart_tx(MIDI_NOTE_ON);
-          if (velocity.noteon) { /* prevent overlapping notes */
-            uart_tx(velocity.note);
-            uart_tx(0);
-          }
-          uart_tx(velocity.note);
-          uart_tx(keyvel);
-          velocity.noteon = 1;
         }
+        uart_tx(velocity.note);
+        uart_tx(keyvel);
+        velocity.noteon = 1;
       }
     } else if (mode == MICROTUNE) {
       if (dir) {
