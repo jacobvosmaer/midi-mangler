@@ -5,21 +5,17 @@ CC = avr-gcc
 override CPPFLAGS = -Imidiparser -DF_CPU=16000000L
 override CFLAGS = -g -Wall -Wextra -Werror -Os -flto -std=gnu89 -pedantic
 override TARGET_ARCH = -mmcu=atmega32u4
-override LDFLAGS = -Wl,-Map,$(PRG).map
+override LDFLAGS =
 override LDLIBS = 
 
 OBJCOPY        = avr-objcopy
-OBJDUMP        = avr-objdump
 
-all: $(PRG).hex $(PRG).lst
+all: $(PRG).hex
 
 $(PRG): midiparser/midi.o
 
 clean:
 	rm -rf -- $(OBJ) $(PRG) $(PRG).lst $(PRG).map $(PRG).hex
-
-%.lst: %
-	$(OBJDUMP) -h -S $< > $@
 
 %.hex: %
 	$(OBJCOPY) -j .text -j .data -O ihex $< $@
