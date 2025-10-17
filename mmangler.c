@@ -149,24 +149,23 @@ int main(void) {
       }
       if (!uart_rx(&midi_byte))
         continue;
-      if (msg = midi_read(&mp, midi_byte), msg.status) {
-        msg.status &= 0xf0;
-        if (msg.status == MIDI_NOTE_OFF ||
-            (msg.status == MIDI_NOTE_ON && !msg.data[1])) {
-          uart_tx(MIDI_NOTE_OFF);
-          uart_tx(msg.data[0]);
-          uart_tx(0);
-        } else if (msg.status == MIDI_NOTE_ON) {
-          uint16_t pitchbend = 8192 + ((int16_t)microtune.tune[msg.data[0]]
-                                       << (13 - MTUNESHIFT));
-          microtune.lastnote = msg.data[0];
-          uart_tx(MIDI_PITCH_BEND);
-          uart_tx(pitchbend & 127);
-          uart_tx(pitchbend >> 7);
-          uart_tx(MIDI_NOTE_ON);
-          uart_tx(msg.data[0]);
-          uart_tx(msg.data[1]);
-        }
+      msg = midi_read(&mp, midi_byte);
+      msg.status &= 0xf0;
+      if (msg.status == MIDI_NOTE_OFF ||
+          (msg.status == MIDI_NOTE_ON && !msg.data[1])) {
+        uart_tx(MIDI_NOTE_OFF);
+        uart_tx(msg.data[0]);
+        uart_tx(0);
+      } else if (msg.status == MIDI_NOTE_ON) {
+        uint16_t pitchbend =
+            8192 + ((int16_t)microtune.tune[msg.data[0]] << (13 - MTUNESHIFT));
+        microtune.lastnote = msg.data[0];
+        uart_tx(MIDI_PITCH_BEND);
+        uart_tx(pitchbend & 127);
+        uart_tx(pitchbend >> 7);
+        uart_tx(MIDI_NOTE_ON);
+        uart_tx(msg.data[0]);
+        uart_tx(msg.data[1]);
       }
     } else if (mode == COMPRESS) {
       uint8_t note;
