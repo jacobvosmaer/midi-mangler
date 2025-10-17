@@ -11,7 +11,7 @@ override LDLIBS =
 OBJCOPY        = avr-objcopy
 OBJDUMP        = avr-objdump
 
-all: $(PRG).bin $(PRG).lst
+all: $(PRG).hex $(PRG).lst
 
 midi.o: midiparser/midi.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c -o $@ $^
@@ -19,13 +19,13 @@ midi.o: midiparser/midi.c
 $(PRG): midi.o
 
 clean:
-	rm -rf -- $(OBJ) $(PRG) $(PRG).lst $(PRG).map $(PRG).bin
+	rm -rf -- $(OBJ) $(PRG) $(PRG).lst $(PRG).map $(PRG).hex
 
 %.lst: %
 	$(OBJDUMP) -h -S $< > $@
 
-%.bin: %
-	$(OBJCOPY) -j .text -j .data -O binary $< $@
+%.hex: %
+	$(OBJCOPY) -j .text -j .data -O ihex $< $@
 
 format:
 	clang-format -i -style=file *.c *.h
