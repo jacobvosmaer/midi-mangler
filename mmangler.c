@@ -86,8 +86,8 @@ struct {
 } microtune;
 #define MTUNESHIFT 5
 struct {
-  uint8_t shift;
-} compress = {64};
+  uint8_t held[16], shift;
+} compress = {{0}, 64};
 
 enum mode { ECHO, VELOCITY, MICROTUNE, COMPRESS, NMODE };
 int main(void) {
@@ -171,7 +171,27 @@ int main(void) {
     } else if (mode == COMPRESS) {
       uint8_t note;
       int16_t bendrange = 2, steps = 6;
-      compress.shift = (compress.shift + dir) & 127;
+      if (dir) {
+        uint8_t i, j;
+        compress.shift = (compress.shift + dir) & 127;
+        /* If the user turns the encoder while holding down a MIDI key, that key
+         * will never get a note-off when it's released. To avoid that we send a
+         * note-off for every held key when the encoder is turned. You would
+         * think that is what MIDI "all notes off" is for but some synths ignore
+         * it so we manually track the held notes. */
+        for (i = 0; i < nelem(compress.held); i++) {
+          if (!compress.held[i])
+            continue;
+          for (j = 0; j < 8; j++) {
+            if (compress.held[i] & (1 << j)) {
+              uart_tx(MIDI_NOTE_OFF);
+              uart_tx(i * 8 + j);
+              uart_tx(0);
+            }
+          }
+          compress.held[i] = 0;
+        }
+      }
       if (!uart_rx(&midi_byte))
         continue;
       msg = midi_read(&mp, midi_byte);
@@ -182,6 +202,7 @@ int main(void) {
         uart_tx(msg.status);
         uart_tx(note);
         uart_tx(msg.data[1]);
+        compress.held[note / 8] &= ~(1 << (note % 8));
       } else if (msg.status == MIDI_NOTE_ON) {
         uint16_t bend = 8192 + ((int16_t)msg.data[0] % steps - steps / 2) *
                                    8192 / (steps * bendrange);
@@ -191,6 +212,7 @@ int main(void) {
         uart_tx(MIDI_NOTE_ON);
         uart_tx(note);
         uart_tx(msg.data[1]);
+        compress.held[note / 8] |= 1 << (note % 8);
       }
     }
   }
