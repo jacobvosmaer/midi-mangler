@@ -1,22 +1,19 @@
-/* velocity mapper */
+/* MIDI fun box */
 #include "midi.h"
 #include <avr/io.h>
 #include <util/delay.h>
 #define nelem(x) (int)(sizeof(x) / sizeof(*(x)))
-
 void uart_init(void) {
   enum { midi_baud = 31250, ubrr = (F_CPU / 16 / midi_baud) - 1 };
   UBRR1H = ubrr >> 8;
   UBRR1L = ubrr & 0xff;
   UCSR1B = _BV(RXEN1) | _BV(TXEN1);
 }
-
 void uart_tx(uint8_t c) {
   while (!(UCSR1A & (1 << UDRE1)))
     ;
   UDR1 = c;
 }
-
 uint8_t uart_rx(uint8_t *c) {
   uint8_t status = UCSR1A;
   if (!(status & _BV(RXC1)))
@@ -24,47 +21,38 @@ uint8_t uart_rx(uint8_t *c) {
   *c = UDR1;
   return !(status & (_BV(FE1) | _BV(DOR1) | _BV(UPE1)));
 }
-
 struct {
   volatile uint8_t *const port, *const ddr, *const pin;
   uint8_t bit[2], debounce[2], elapsed;
 } encoder = {&PORTD, &DDRD, &PIND, {PORTD0, PORTD1}, {0}, 0};
-
 void encoder_init(void) {
   uint8_t mask = (1 << encoder.bit[0]) | (1 << encoder.bit[1]);
   *encoder.ddr &= ~mask;
   *encoder.port |= mask;
 }
-
 int encoder_debounce(uint8_t delta) {
   int i, a, b;
-
   if (delta < 16 - encoder.elapsed) {
     encoder.elapsed += delta;
     return 0;
   }
   encoder.elapsed = 0;
-
   for (i = 0; i < nelem(encoder.debounce); i++)
     encoder.debounce[i] =
         (encoder.debounce[i] << 1) | !!(*encoder.pin & (1 << encoder.bit[i]));
-
   a = encoder.debounce[0] & 3;
   b = encoder.debounce[1] & 3;
   return (a == 1 && b == 0) - (a == 2 && b == 0);
 }
-
 struct {
   volatile uint8_t *const port, *const ddr, *const pin;
   uint8_t bit;
   uint16_t debounce;
 } button = {&PORTD, &DDRD, &PIND, 1 << PORTD4, 0};
-
 void button_init(void) {
   *button.ddr &= ~button.bit;
   *button.port |= button.bit;
 }
-
 int button_debounce(uint8_t delta) {
   if (!delta)
     return 0;
@@ -73,10 +61,8 @@ int button_debounce(uint8_t delta) {
    * ground. The button is pressed when the GPIO reads 0. */
   return button.debounce == 0x8000;
 }
-
 /* Run Timer0 at F_CPU/1024 Hz */
 void timer_init(void) { TCCR0B = 1 << CS02 | 1 << CS00; }
-
 struct {
   uint8_t note, noteon;
 } velocity = {36, 0};
@@ -88,17 +74,14 @@ struct {
 struct {
   uint8_t held[16], shift;
 } compress = {{0}, 64};
-
-enum mode { ECHO, VELOCITY, MICROTUNE, COMPRESS, NMODE };
+enum mode { ECHO, VELOCITY, MICROTUNE, COMPRESS, NMODE } mode;
 int main(void) {
   midi_parser mp = {0};
   uint8_t time = 0, midi_byte;
-  enum mode mode = ECHO;
   uart_init();
   timer_init();
   encoder_init();
   button_init();
-
   while (1) {
     midi_message msg;
     uint8_t delta = TCNT0 - time;
@@ -180,7 +163,7 @@ int main(void) {
          * think that is what MIDI "all notes off" is for but some synths ignore
          * it so we manually track the held notes. */
         for (i = 0; i < nelem(compress.held); i++) {
-          if (!compress.held[i])
+          if (compress.held[i])
             continue;
           for (j = 0; j < 8; j++) {
             if (compress.held[i] & (1 << j)) {
