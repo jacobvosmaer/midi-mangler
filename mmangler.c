@@ -21,44 +21,49 @@ uint8_t uart_rx(uint8_t *c) {
   *c = UDR1;
   return !(status & (_BV(FE1) | _BV(DOR1) | _BV(UPE1)));
 }
-struct {
+struct pinin {
   volatile uint8_t *const port, *const ddr, *const pin;
-  uint8_t bit[2], debounce[2], elapsed;
-} encoder = {&PORTD, &DDRD, &PIND, {PORTD0, PORTD1}, {0}, 0};
+  uint8_t mask;
+};
+void pinin_init(struct pinin *p) {
+  *(p->ddr) &= ~p->mask;
+  *(p->port) |= p->mask;
+}
+uint8_t pinin_read(struct pinin *p) { return !!(*(p->pin) & p->mask); }struct {
+  struct pinin pin[2];
+  uint16_t debounce[2];
+} encoder = {
+    {
+        {&PORTD, &DDRD, &PIND, 1 << PORTD0},
+        {&PORTD, &DDRD, &PIND, 1 << PORTD1},
+    },
+    {0},
+};
 void encoder_init(void) {
-  uint8_t mask = (1 << encoder.bit[0]) | (1 << encoder.bit[1]);
-  *encoder.ddr &= ~mask;
-  *encoder.port |= mask;
+  uint8_t i;
+  for (i = 0; i < nelem(encoder.pin); i++)
+    pinin_init(encoder.pin + i);
 }
 int encoder_debounce(uint8_t delta) {
-  int i, a, b;
-  if (delta < 16 - encoder.elapsed) {
-    encoder.elapsed += delta;
+  uint8_t i;
+  if (!delta)
     return 0;
-  }
-  encoder.elapsed = 0;
-  for (i = 0; i < nelem(encoder.debounce); i++)
+  for (i = 0; i < nelem(encoder.pin); i++)
     encoder.debounce[i] =
-        (encoder.debounce[i] << 1) | !!(*encoder.pin & (1 << encoder.bit[i]));
-  a = encoder.debounce[0] & 3;
-  b = encoder.debounce[1] & 3;
-  return (a == 1 && b == 0) - (a == 2 && b == 0);
+        (encoder.debounce[i] << 1) | pinin_read(encoder.pin + i);
+  if (encoder.debounce[1])
+    return 0;
+  return (encoder.debounce[0] == 0x0001) - (encoder.debounce[0] == 0x8000);
 }
 struct {
-  volatile uint8_t *const port, *const ddr, *const pin;
-  uint8_t bit;
+  struct pinin pin;
   uint16_t debounce;
-} button = {&PORTD, &DDRD, &PIND, 1 << PORTD4, 0};
-void button_init(void) {
-  *button.ddr &= ~button.bit;
-  *button.port |= button.bit;
-}
+} button = {{&PORTD, &DDRD, &PIND, 1 << PORTD4}, 0};
+void button_init(void) { pinin_init(&button.pin); }
 int button_debounce(uint8_t delta) {
   if (!delta)
     return 0;
-  button.debounce = (button.debounce << 1) | !!(*button.pin & button.bit);
-  /* The GPIO is held high by a pull-up resistor and the button shorts it to
-   * ground. The button is pressed when the GPIO reads 0. */
+  button.debounce = (button.debounce << 1) | pinin_read(&button.pin);
   return button.debounce == 0x8000;
 }
 /* Run Timer0 at F_CPU/1024 Hz */
