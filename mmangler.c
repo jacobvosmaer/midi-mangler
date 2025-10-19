@@ -131,7 +131,7 @@ void microtune_midi(midi_message msg) {
   }
 }
 struct {
-  uint8_t held[16], shift;
+  uint8_t held[128 / 8], shift;
 } compress = {{0}, 64};
 void compress_encoder(int dir) {
   uint8_t i, j;
