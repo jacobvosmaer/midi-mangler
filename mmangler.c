@@ -25,6 +25,7 @@ struct pinin {
   volatile uint8_t *const port, *const ddr, *const pin;
   uint8_t mask;
 };
+#define PININ(port, n) {&PORT##port, &DDR##port, &PIN##port, 1 << PORT##port##n}
 void pinin_init(struct pinin *p) {
   *(p->ddr) &= ~p->mask;
   *(p->port) |= p->mask;
@@ -34,16 +35,14 @@ struct debouncer {
   struct pinin pin;
   uint16_t history;
 };
+#define DEBOUNCER(port, n) {PININ(port, n), 0}
 void debouncer_init(struct debouncer *db) { pinin_init(&db->pin); }
 uint16_t debouncer_update(struct debouncer *db) {
   return db->history = (db->history << 1) | pinin_read(&db->pin);
 }
 struct {
   struct debouncer debouncer[2];
-} encoder = {{
-    {{&PORTD, &DDRD, &PIND, 1 << PORTD0}, 0},
-    {{&PORTD, &DDRD, &PIND, 1 << PORTD1}, 0},
-}};
+} encoder = {{DEBOUNCER(D, 0), DEBOUNCER(D, 1)}};
 void encoder_init(void) {
   uint8_t i;
   for (i = 0; i < nelem(encoder.debouncer); i++)
@@ -59,7 +58,7 @@ int encoder_debounce(uint8_t delta) {
 }
 struct {
   struct debouncer debouncer;
-} button = {{{&PORTD, &DDRD, &PIND, 1 << PORTD4}, 0}};
+} button = {DEBOUNCER(D, 4)};
 void button_init(void) { debouncer_init(&button.debouncer); }
 int button_debounce(uint8_t delta) {
   uint16_t x = delta ? debouncer_update(&button.debouncer) : 0;
