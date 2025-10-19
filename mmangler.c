@@ -194,13 +194,13 @@ int main(void) {
   button_init();
   while (1) {
     uint8_t delta = TCNT0 - time;
-    int dir = encoder_debounce(delta);
     mode = (mode + button_debounce(delta)) % (nelem(modes) + 1);
     time += delta;
     if (mode == nelem(modes)) {
       if (uart_rx(&midi_byte))
         uart_tx(midi_byte);
     } else {
+      int dir = encoder_debounce(delta);
       if (dir)
         modes[mode].encoder(dir);
       if (uart_rx(&midi_byte))
