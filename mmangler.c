@@ -29,42 +29,41 @@ void pinin_init(struct pinin *p) {
   *(p->ddr) &= ~p->mask;
   *(p->port) |= p->mask;
 }
-uint8_t pinin_read(struct pinin *p) { return !!(*(p->pin) & p->mask); }struct {
-  struct pinin pin[2];
-  uint16_t debounce[2];
-} encoder = {
-    {
-        {&PORTD, &DDRD, &PIND, 1 << PORTD0},
-        {&PORTD, &DDRD, &PIND, 1 << PORTD1},
-    },
-    {0},
+uint8_t pinin_read(struct pinin *p) { return !!(*(p->pin) & p->mask); }
+struct debouncer {
+  struct pinin pin;
+  uint16_t history;
 };
-void encoder_init(void) {
-  uint8_t i;
-  for (i = 0; i < nelem(encoder.pin); i++)
-    pinin_init(encoder.pin + i);
-}
-int encoder_debounce(uint8_t delta) {
-  uint8_t i;
-  if (!delta)
-    return 0;
-  for (i = 0; i < nelem(encoder.pin); i++)
-    encoder.debounce[i] =
-        (encoder.debounce[i] << 1) | pinin_read(encoder.pin + i);
-  if (encoder.debounce[1])
-    return 0;
-  return (encoder.debounce[0] == 0x0001) - (encoder.debounce[0] == 0x8000);
+void debouncer_init(struct debouncer *db) { pinin_init(&db->pin); }
+uint16_t debouncer_update(struct debouncer *db) {
+  return db->history = (db->history << 1) | pinin_read(&db->pin);
 }
 struct {
-  struct pinin pin;
-  uint16_t debounce;
-} button = {{&PORTD, &DDRD, &PIND, 1 << PORTD4}, 0};
-void button_init(void) { pinin_init(&button.pin); }
+  struct debouncer debouncer[2];
+} encoder = {{
+    {{&PORTD, &DDRD, &PIND, 1 << PORTD0}, 0},
+    {{&PORTD, &DDRD, &PIND, 1 << PORTD1}, 0},
+}};
+void encoder_init(void) {
+  uint8_t i;
+  for (i = 0; i < nelem(encoder.debouncer); i++)
+    debouncer_init(encoder.debouncer + i);
+}
+int encoder_debounce(uint8_t delta) {
+  uint16_t x[nelem(encoder.debouncer)] = {0};
+  uint8_t i;
+  if (delta)
+    for (i = 0; i < nelem(encoder.debouncer); i++)
+      x[i] = debouncer_update(encoder.debouncer + i);
+  return (x[0] == 0x0001 && x[1] == 0) - (x[0] == 0x8000 && x[1] == 0);
+}
+struct {
+  struct debouncer debouncer;
+} button = {{{&PORTD, &DDRD, &PIND, 1 << PORTD4}, 0}};
+void button_init(void) { debouncer_init(&button.debouncer); }
 int button_debounce(uint8_t delta) {
-  if (!delta)
-    return 0;
-  button.debounce = (button.debounce << 1) | pinin_read(&button.pin);
-  return button.debounce == 0x8000;
+  uint16_t x = delta ? debouncer_update(&button.debouncer) : 0;
+  return x == 0x8000;
 }
 /* Run Timer0 at F_CPU/1024 Hz */
 void timer_init(void) { TCCR0B = 1 << CS02 | 1 << CS00; }
