@@ -176,7 +176,6 @@ void compress_midi(midi_message msg) {
     compress.held[note / 8] |= 1 << (note % 8);
   }
 }
-enum mode { ECHO, VELOCITY, MICROTUNE, COMPRESS } mode;
 struct {
   void (*encoder)(int dir);
   void (*midi)(midi_message msg);
@@ -185,6 +184,7 @@ struct {
     {microtune_encoder, microtune_midi},
     {compress_encoder, compress_midi},
 };
+uint8_t mode = nelem(modes); /* echo mode */
 int main(void) {
   midi_parser mp = {0};
   uint8_t time = 0, midi_byte;
@@ -197,14 +197,14 @@ int main(void) {
     int dir = encoder_debounce(delta);
     mode = (mode + button_debounce(delta)) % (nelem(modes) + 1);
     time += delta;
-    if (mode == ECHO) {
+    if (mode == nelem(modes)) {
       if (uart_rx(&midi_byte))
         uart_tx(midi_byte);
     } else {
       if (dir)
-        modes[mode - 1].encoder(dir);
+        modes[mode].encoder(dir);
       if (uart_rx(&midi_byte))
-        modes[mode - 1].midi(midi_read(&mp, midi_byte));
+        modes[mode].midi(midi_read(&mp, midi_byte));
     }
   }
 }
