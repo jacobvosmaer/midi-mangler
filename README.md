@@ -31,5 +31,7 @@ because the bootloader goes away after 8 seconds.
 
 ## Software
 
-Different branches have different projects on it. I make a new branch
-whenever I have a new project I can use this box for.
+There are multiple firmwares in this repository, organized into subdirectories.
+
+- [TX81Z DEC/INC buttons via rotary encoder](tx81z-dec-inc/)
+- [Micro-tuning and velocity mapping](microtune/)
