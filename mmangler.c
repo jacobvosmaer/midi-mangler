@@ -69,15 +69,122 @@ void timer_init(void) { TCCR0B = 1 << CS02 | 1 << CS00; }
 struct {
   uint8_t note, noteon;
 } velocity = {36, 0};
+void velocity_encoder(int dir) {
+  velocity.note = (velocity.note + dir) & 127;
+  uart_tx(MIDI_NOTE_ON);
+  uart_tx(velocity.note);
+  uart_tx(64);
+  uart_tx(velocity.note);
+  uart_tx(0);
+}
+void velocity_midi(midi_message msg) {
+  msg.status &= 0xf0;
+  if (msg.status == MIDI_NOTE_OFF ||
+      (msg.status == MIDI_NOTE_ON && !msg.data[1])) {
+    uart_tx(MIDI_NOTE_ON);
+    uart_tx(velocity.note);
+    uart_tx(0);
+    velocity.noteon = 0;
+  } else if (msg.status == MIDI_NOTE_ON) {
+    int keyvel = 1, mapstart = 48;
+    if (msg.data[0] >= mapstart)
+      keyvel += (msg.data[0] - mapstart) * 5;
+    if (keyvel > 127)
+      keyvel = 127;
+    uart_tx(MIDI_NOTE_ON);
+    if (velocity.noteon) { /* prevent overlapping notes */
+      uart_tx(velocity.note);
+      uart_tx(0);
+    }
+    uart_tx(velocity.note);
+    uart_tx(keyvel);
+    velocity.noteon = 1;
+  }
+}
 struct {
   int8_t tune[128];
   uint8_t lastnote;
 } microtune;
 #define MTUNESHIFT 5
+void microtune_encoder(int dir) {
+  int8_t *t = microtune.tune + microtune.lastnote;
+  *t += dir;
+  *t += (*t == -(1 << MTUNESHIFT)) - (*t == (1 << MTUNESHIFT));
+}
+void microtune_midi(midi_message msg) {
+  msg.status &= 0xf0;
+  if (msg.status == MIDI_NOTE_OFF ||
+      (msg.status == MIDI_NOTE_ON && !msg.data[1])) {
+    uart_tx(MIDI_NOTE_OFF);
+    uart_tx(msg.data[0]);
+    uart_tx(0);
+  } else if (msg.status == MIDI_NOTE_ON) {
+    uint16_t pitchbend =
+        8192 + ((int16_t)microtune.tune[msg.data[0]] << (13 - MTUNESHIFT));
+    microtune.lastnote = msg.data[0];
+    uart_tx(MIDI_PITCH_BEND);
+    uart_tx(pitchbend & 127);
+    uart_tx(pitchbend >> 7);
+    uart_tx(MIDI_NOTE_ON);
+    uart_tx(msg.data[0]);
+    uart_tx(msg.data[1]);
+  }
+}
 struct {
   uint8_t held[16], shift;
 } compress = {{0}, 64};
-enum mode { ECHO, VELOCITY, MICROTUNE, COMPRESS, NMODE } mode;
+void compress_encoder(int dir) {
+  uint8_t i, j;
+  compress.shift = (compress.shift + dir) & 127;
+  /* If the user turns the encoder while holding down a MIDI key, that key
+   * will never get a note-off when it's released. To avoid that we send a
+   * note-off for every held key when the encoder is turned. You would
+   * think that is what MIDI "all notes off" is for but some synths ignore
+   * it so we manually track the held notes. */
+  for (i = 0; i < nelem(compress.held); i++) {
+    if (compress.held[i])
+      continue;
+    for (j = 0; j < 8; j++) {
+      if (compress.held[i] & (1 << j)) {
+        uart_tx(MIDI_NOTE_OFF);
+        uart_tx(i * 8 + j);
+        uart_tx(0);
+      }
+    }
+    compress.held[i] = 0;
+  }
+}
+void compress_midi(midi_message msg) {
+  int16_t bendrange = 2, steps = 6;
+  uint8_t note = msg.data[0] / steps + compress.shift;
+  msg.status &= 0xf0;
+  if (msg.status == MIDI_NOTE_OFF ||
+      (msg.status == MIDI_NOTE_ON && !msg.data[1])) {
+    uart_tx(msg.status);
+    uart_tx(note);
+    uart_tx(msg.data[1]);
+    compress.held[note / 8] &= ~(1 << (note % 8));
+  } else if (msg.status == MIDI_NOTE_ON) {
+    uint16_t bend = 8192 + ((int16_t)msg.data[0] % steps - steps / 2) * 8192 /
+                               (steps * bendrange);
+    uart_tx(MIDI_PITCH_BEND);
+    uart_tx(bend & 127);
+    uart_tx(bend >> 7);
+    uart_tx(MIDI_NOTE_ON);
+    uart_tx(note);
+    uart_tx(msg.data[1]);
+    compress.held[note / 8] |= 1 << (note % 8);
+  }
+}
+enum mode { ECHO, VELOCITY, MICROTUNE, COMPRESS } mode;
+struct {
+  void (*encoder)(int dir);
+  void (*midi)(midi_message msg);
+} modes[] = {
+    {velocity_encoder, velocity_midi},
+    {microtune_encoder, microtune_midi},
+    {compress_encoder, compress_midi},
+};
 int main(void) {
   midi_parser mp = {0};
   uint8_t time = 0, midi_byte;
@@ -86,120 +193,18 @@ int main(void) {
   encoder_init();
   button_init();
   while (1) {
-    midi_message msg;
     uint8_t delta = TCNT0 - time;
     int dir = encoder_debounce(delta);
-    mode = (mode + button_debounce(delta)) % NMODE;
+    mode = (mode + button_debounce(delta)) % (nelem(modes) + 1);
     time += delta;
     if (mode == ECHO) {
       if (uart_rx(&midi_byte))
         uart_tx(midi_byte);
-    } else if (mode == VELOCITY) {
-      if (dir) {
-        velocity.note = (velocity.note + dir) & 127;
-        uart_tx(MIDI_NOTE_ON);
-        uart_tx(velocity.note);
-        uart_tx(64);
-        uart_tx(velocity.note);
-        uart_tx(0);
-      }
-      if (!uart_rx(&midi_byte))
-        continue;
-      msg = midi_read(&mp, midi_byte);
-      msg.status &= 0xf0;
-      if (msg.status == MIDI_NOTE_OFF ||
-          (msg.status == MIDI_NOTE_ON && !msg.data[1])) {
-        uart_tx(MIDI_NOTE_ON);
-        uart_tx(velocity.note);
-        uart_tx(0);
-        velocity.noteon = 0;
-      } else if (msg.status == MIDI_NOTE_ON) {
-        int keyvel = 1, mapstart = 48;
-        if (msg.data[0] >= mapstart)
-          keyvel += (msg.data[0] - mapstart) * 5;
-        if (keyvel > 127)
-          keyvel = 127;
-        uart_tx(MIDI_NOTE_ON);
-        if (velocity.noteon) { /* prevent overlapping notes */
-          uart_tx(velocity.note);
-          uart_tx(0);
-        }
-        uart_tx(velocity.note);
-        uart_tx(keyvel);
-        velocity.noteon = 1;
-      }
-    } else if (mode == MICROTUNE) {
-      if (dir) {
-        int8_t *t = microtune.tune + microtune.lastnote;
-        *t += dir;
-        *t += (*t == -(1 << MTUNESHIFT)) - (*t == (1 << MTUNESHIFT));
-      }
-      if (!uart_rx(&midi_byte))
-        continue;
-      msg = midi_read(&mp, midi_byte);
-      msg.status &= 0xf0;
-      if (msg.status == MIDI_NOTE_OFF ||
-          (msg.status == MIDI_NOTE_ON && !msg.data[1])) {
-        uart_tx(MIDI_NOTE_OFF);
-        uart_tx(msg.data[0]);
-        uart_tx(0);
-      } else if (msg.status == MIDI_NOTE_ON) {
-        uint16_t pitchbend =
-            8192 + ((int16_t)microtune.tune[msg.data[0]] << (13 - MTUNESHIFT));
-        microtune.lastnote = msg.data[0];
-        uart_tx(MIDI_PITCH_BEND);
-        uart_tx(pitchbend & 127);
-        uart_tx(pitchbend >> 7);
-        uart_tx(MIDI_NOTE_ON);
-        uart_tx(msg.data[0]);
-        uart_tx(msg.data[1]);
-      }
-    } else if (mode == COMPRESS) {
-      uint8_t note;
-      int16_t bendrange = 2, steps = 6;
-      if (dir) {
-        uint8_t i, j;
-        compress.shift = (compress.shift + dir) & 127;
-        /* If the user turns the encoder while holding down a MIDI key, that key
-         * will never get a note-off when it's released. To avoid that we send a
-         * note-off for every held key when the encoder is turned. You would
-         * think that is what MIDI "all notes off" is for but some synths ignore
-         * it so we manually track the held notes. */
-        for (i = 0; i < nelem(compress.held); i++) {
-          if (compress.held[i])
-            continue;
-          for (j = 0; j < 8; j++) {
-            if (compress.held[i] & (1 << j)) {
-              uart_tx(MIDI_NOTE_OFF);
-              uart_tx(i * 8 + j);
-              uart_tx(0);
-            }
-          }
-          compress.held[i] = 0;
-        }
-      }
-      if (!uart_rx(&midi_byte))
-        continue;
-      msg = midi_read(&mp, midi_byte);
-      msg.status &= 0xf0;
-      note = msg.data[0] / steps + compress.shift;
-      if (msg.status == MIDI_NOTE_OFF ||
-          (msg.status == MIDI_NOTE_ON && !msg.data[1])) {
-        uart_tx(msg.status);
-        uart_tx(note);
-        uart_tx(msg.data[1]);
-        compress.held[note / 8] &= ~(1 << (note % 8));
-      } else if (msg.status == MIDI_NOTE_ON) {
-        uint16_t bend = 8192 + ((int16_t)msg.data[0] % steps - steps / 2) *
-                                   8192 / (steps * bendrange);
-        uart_tx(MIDI_PITCH_BEND);
-        uart_tx(bend & 127);
-        uart_tx(bend >> 7);
-        uart_tx(MIDI_NOTE_ON);
-        uart_tx(note);
-        uart_tx(msg.data[1]);
-        compress.held[note / 8] |= 1 << (note % 8);
-      }
+    } else {
+      if (dir)
+        modes[mode - 1].encoder(dir);
+      if (uart_rx(&midi_byte))
+        modes[mode - 1].midi(midi_read(&mp, midi_byte));
     }
   }
 }
