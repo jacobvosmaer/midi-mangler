@@ -1,6 +1,5 @@
 /* pinin: GPIO input pin abstraction */
 #include "pinin.h"
-#include <avr/io.h>
 void pinin_init(struct pinin *p) {
 	*(p->ddr) &= ~p->mask;
 	*(p->port) |= p->mask;
