@@ -1,9 +1,7 @@
-PRG = mmangler
-OBJ = midi.o pin.o
-VPATH = midiparser
+VPATH = $(BASEDIR)/lib:$(BASEDIR)/midiparser
 CC = avr-gcc
 OBJCOPY = avr-objcopy
-CPPFLAGS = -Imidiparser -DF_CPU=16000000L
+CPPFLAGS = -I$(BASEDIR)/midiparser -I$(BASEDIR)/lib -DF_CPU=16000000L
 CFLAGS = -std=gnu89 -Os -flto -Wall -Wextra -Werror -pedantic
 TARGET_ARCH = -mmcu=atmega32u4
 
