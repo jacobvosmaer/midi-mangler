@@ -54,7 +54,7 @@ int encoder_debounce(uint8_t delta) {
   if (delta)
     for (i = 0; i < nelem(encoder.debouncer); i++)
       x[i] = debouncer_update(encoder.debouncer + i);
-  return (x[0] == 0x0001 && x[1] == 0) - (x[0] == 0x8000 && x[1] == 0);
+  return (x[0] == 0x7fff && x[1] == 0) - (x[0] == 0x8000 && x[1] == 0);
 }
 struct {
   struct debouncer debouncer;
