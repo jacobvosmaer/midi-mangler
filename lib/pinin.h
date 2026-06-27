@@ -15,4 +15,15 @@ struct debouncer {
 #define DEBOUNCER(port, n) {PININ(port, n), 0}
 void debouncer_init(struct debouncer *db);
 uint16_t debouncer_update(struct debouncer *db);
+struct encoder {
+	struct debouncer debouncer[2];
+};
+#define ENCODER(port1, n1, port2, n2)                                          \
+	{                                                                      \
+		{                                                              \
+			DEBOUNCER(port1, n1), DEBOUNCER(port2, n2)             \
+		}                                                              \
+	}
+void encoder_init(struct encoder *enc);
+int encoder_debounce(struct encoder *enc, uint8_t delta);
 #endif

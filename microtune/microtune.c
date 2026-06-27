@@ -6,22 +6,6 @@
 #include <util/delay.h>
 #define nelem(x) (int)(sizeof(x) / sizeof(*(x)))
 struct {
-	struct debouncer debouncer[2];
-} encoder = {{DEBOUNCER(D, 0), DEBOUNCER(D, 1)}};
-void encoder_init(void) {
-	uint8_t i;
-	for (i = 0; i < nelem(encoder.debouncer); i++)
-		debouncer_init(encoder.debouncer + i);
-}
-int encoder_debounce(uint8_t delta) {
-	uint16_t x[nelem(encoder.debouncer)] = {0};
-	uint8_t i;
-	if (delta)
-		for (i = 0; i < nelem(encoder.debouncer); i++)
-			x[i] = debouncer_update(encoder.debouncer + i);
-	return (x[0] == 0x7fff && x[1] == 0) - (x[0] == 0x8000 && x[1] == 0);
-}
-struct {
 	struct debouncer debouncer;
 } button = {DEBOUNCER(D, 4)};
 void button_init(void) { debouncer_init(&button.debouncer); }
@@ -153,11 +137,12 @@ struct {
 };
 uint8_t mode = nelem(modes); /* echo mode */
 int main(void) {
+	struct encoder encoder = ENCODER(D, 0, D, 1);
 	midi_parser mp = {0};
 	uint8_t time = 0, midi_byte;
 	uart_init();
 	timer_init();
-	encoder_init();
+	encoder_init(&encoder);
 	button_init();
 	while (1) {
 		uint8_t delta = TCNT0 - time;
@@ -167,7 +152,7 @@ int main(void) {
 			if (uart_rx(&midi_byte))
 				uart_tx(midi_byte);
 		} else {
-			int dir = encoder_debounce(delta);
+			int dir = encoder_debounce(&encoder, delta);
 			if (dir)
 				modes[mode].encoder(dir);
 			if (uart_rx(&midi_byte))
