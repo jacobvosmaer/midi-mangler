@@ -23,8 +23,16 @@ struct queue clock, midi;
  * timer ticks that corresponds to 1 MIDI clock pulse for the given tempo in BPM
  */
 int bpmticks(int n) { return (F_CPU / prescale / 2 * 5) / n; }
+volatile uint16_t compare;
+volatile uint8_t newcompare;
 #define MIDI_CLOCK 0xf8
-ISR(TIMER1_COMPA_vect) { push(&clock, MIDI_CLOCK); }
+ISR(TIMER1_COMPA_vect) {
+	if (newcompare) {
+		newcompare = 0;
+		OCR1A = compare;
+	}
+	push(&clock, MIDI_CLOCK);
+}
 int main(void) {
 	struct encoder encoder = ENCODER(D, 0, D, 1);
 	uint8_t time = 0;
@@ -44,7 +52,8 @@ int main(void) {
 		if (dir) {
 			bpm += dir;
 			bpm = max(min(bpm, 300), 30);
-			OCR1A = bpmticks(bpm);
+			compare = bpmticks(bpm);
+			newcompare = 1;
 		}
 		if (uart_rx(&incoming) && incoming != MIDI_CLOCK)
 			push(&midi, incoming);
