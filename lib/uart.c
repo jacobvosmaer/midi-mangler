@@ -7,8 +7,9 @@ void uart_init(void) {
 	UBRR1L = ubrr & 0xff;
 	UCSR1B = _BV(RXEN1) | _BV(TXEN1);
 }
+uint8_t uart_tx_ready(void) { return UCSR1A & (1 << UDRE1); }
 void uart_tx(uint8_t c) {
-	while (!(UCSR1A & (1 << UDRE1)))
+	while (!uart_tx_ready())
 		;
 	UDR1 = c;
 }
