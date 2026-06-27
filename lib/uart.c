@@ -2,9 +2,7 @@
 #include "uart.h"
 #include <avr/io.h>
 void uart_init(void) {
-	enum { midi_baud = 31250, ubrr = (F_CPU / 16 / midi_baud) - 1 };
-	UBRR1H = ubrr >> 8;
-	UBRR1L = ubrr & 0xff;
+	UBRR1 = (F_CPU / 16 / 31250) - 1;
 	UCSR1B = _BV(RXEN1) | _BV(TXEN1);
 }
 uint8_t uart_tx_ready(void) { return UCSR1A & (1 << UDRE1); }
