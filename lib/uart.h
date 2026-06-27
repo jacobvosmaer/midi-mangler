@@ -2,7 +2,7 @@
 #define UART_H
 #include <stdint.h>
 void uart_init(void);
-uint8_t uart_tx_ready(void);
+int uart_tx_ready(void);
 void uart_tx(uint8_t c);
-uint8_t uart_rx(uint8_t *c);
+int uart_rx(uint8_t *c);
 #endif
