@@ -11,7 +11,7 @@ all: $(PRG)
 $(PRG): $(OBJ)
 
 clean:
-	rm -rf -- $(OBJ) $(PRG) $(PRG).hex
+	rm -rf -- $(OBJ) $(PRG) $(PRG).hex $(PRG).lst
 
 %.hex: %
 	$(OBJCOPY) -j .text -j .data -O ihex $< $@
