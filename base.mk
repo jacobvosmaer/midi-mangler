@@ -1,6 +1,7 @@
 VPATH = $(BASEDIR)/lib:$(BASEDIR)/midiparser
 CC = avr-gcc
 OBJCOPY = avr-objcopy
+OBJDUMP = avr-objdump
 CPPFLAGS = -I$(BASEDIR)/midiparser -I$(BASEDIR)/lib -DF_CPU=16000000L
 CFLAGS = -std=gnu89 -Os -flto -Wall -Wextra -Werror -pedantic
 TARGET_ARCH = -mmcu=atmega32u4
@@ -14,6 +15,9 @@ clean:
 
 %.hex: %
 	$(OBJCOPY) -j .text -j .data -O ihex $< $@
+
+%.lst: %
+	$(OBJDUMP) -h -S $< > $@
 
 format:
 	clang-format -i -style=file *.c *.h
