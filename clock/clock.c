@@ -6,21 +6,21 @@
 #define nelem(x) (int)(sizeof(x) / sizeof(*(x)))
 #define min(x, y) ((x) < (y) ? (x) : (y))
 #define max(x, y) ((x) > (y) ? (x) : (y))
+#define VOLREAD(type, addr) (*(volatile type *)(addr))
+#define VOLWRITE(type, addr, val) *(volatile type *)(addr) = (val)
 struct queue {
 	uint16_t buf[16];
 	uint8_t head, tail;
 };
 void push(struct queue *q, uint16_t x) {
-	*(volatile uint16_t *)(q->buf + (q->head % nelem(q->buf))) = x;
-	*(volatile uint8_t *)&q->head = q->head + 1;
+	VOLWRITE(uint16_t, q->buf + (q->head % nelem(q->buf)), x);
+	VOLWRITE(uint8_t, &q->head, q->head + 1);
 }
-uint16_t pop(struct queue *q, uint16_t *x) {
-	if (q->head == q->tail)
-		return 0;
-	/* don't care about order of buf and tail writes because push does not
-	 * read tail */
-	*x = q->buf[q->tail++ % nelem(q->buf)];
-	return 1;
+int pop(struct queue *q, uint16_t *x) {
+	int notempty = VOLREAD(uint8_t, &q->head) != q->tail;
+	*x = VOLREAD(uint16_t, q->buf + (q->tail % nelem(q->buf)));
+	q->tail += notempty;
+	return notempty;
 }
 struct queue clock, midi, compare;
 /* MIDI clock is 24 PPQN. the formula below calculates the number of prescaled
