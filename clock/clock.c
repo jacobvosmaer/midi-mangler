@@ -7,30 +7,32 @@
 #define min(x, y) ((x) < (y) ? (x) : (y))
 #define max(x, y) ((x) > (y) ? (x) : (y))
 struct queue {
-	uint8_t buf[16];
+	uint16_t buf[16];
 	uint8_t head, tail;
 };
-void push(struct queue *q, uint8_t x) { q->buf[q->head++ % nelem(q->buf)] = x; }
-uint8_t pop(struct queue *q, uint8_t *x) {
+void push(struct queue *q, uint16_t x) {
+	*(volatile uint16_t *)(q->buf + (q->head % nelem(q->buf))) = x;
+	*(volatile uint8_t *)&q->head = q->head + 1;
+}
+uint16_t pop(struct queue *q, uint16_t *x) {
 	if (q->head == q->tail)
 		return 0;
+	/* don't care about order of buf and tail writes because push does not
+	 * read tail */
 	*x = q->buf[q->tail++ % nelem(q->buf)];
 	return 1;
 }
-struct queue clock, midi;
+struct queue clock, midi, compare;
 #define prescale 64
 /* MIDI clock is 24 PPQN. the formula below calculates the number of prescaled
  * timer ticks that corresponds to 1 MIDI clock pulse for the given tempo in BPM
  */
 int bpmticks(int n) { return (F_CPU / prescale / 2 * 5) / n; }
-volatile uint16_t compare;
-volatile uint8_t newcompare;
 #define MIDI_CLOCK 0xf8
 ISR(TIMER1_COMPA_vect) {
-	if (newcompare) {
-		newcompare = 0;
-		OCR1A = compare;
-	}
+	uint16_t newcompare;
+	while (pop(&compare, &newcompare))
+		OCR1A = newcompare;
 	push(&clock, MIDI_CLOCK);
 }
 int main(void) {
@@ -52,13 +54,12 @@ int main(void) {
 		if (dir) {
 			bpm += dir;
 			bpm = max(min(bpm, 300), 30);
-			compare = bpmticks(bpm);
-			newcompare = 1;
+			push(&compare, bpmticks(bpm));
 		}
 		if (uart_rx(&incoming) && incoming != MIDI_CLOCK)
 			push(&midi, incoming);
 		if (uart_tx_ready()) {
-			uint8_t out;
+			uint16_t out;
 			if (pop(&clock, &out) || pop(&midi, &out))
 				uart_tx(out);
 		}
