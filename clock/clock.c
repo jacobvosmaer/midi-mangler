@@ -6,19 +6,18 @@
 #define nelem(x) (int)(sizeof(x) / sizeof(*(x)))
 #define min(x, y) ((x) < (y) ? (x) : (y))
 #define max(x, y) ((x) > (y) ? (x) : (y))
-#define VOLREAD(type, addr) (*(volatile type *)(addr))
-#define VOLWRITE(type, addr, val) *(volatile type *)(addr) = (val)
+#define VOL(type, addr) *(volatile type *)(addr)
 struct queue {
-	uint16_t buf[16];
+	int buf[16];
 	uint8_t head, tail;
 };
-void push(struct queue *q, uint16_t x) {
-	VOLWRITE(uint16_t, q->buf + (q->head % nelem(q->buf)), x);
-	VOLWRITE(uint8_t, &q->head, q->head + 1);
+void push(struct queue *q, int x) {
+	VOL(int, q->buf + (q->head % nelem(q->buf))) = x;
+	VOL(uint8_t, &q->head) = q->head + 1;
 }
-int pop(struct queue *q, uint16_t *x) {
-	int notempty = VOLREAD(uint8_t, &q->head) != q->tail;
-	*x = VOLREAD(uint16_t, q->buf + (q->tail % nelem(q->buf)));
+int pop(struct queue *q, int *x) {
+	int notempty = VOL(uint8_t, &q->head) != q->tail;
+	*x = VOL(int, q->buf + (q->tail % nelem(q->buf)));
 	q->tail += notempty;
 	return notempty;
 }
@@ -30,7 +29,7 @@ struct queue clock, midi, compare;
 int bpmticks(int n) { return (fTimer1 / 2 * 5) / n; }
 #define MIDI_CLOCK 0xf8
 ISR(TIMER1_COMPA_vect) {
-	uint16_t newcompare;
+	int newcompare;
 	while (pop(&compare, &newcompare))
 		OCR1A = newcompare;
 	push(&clock, MIDI_CLOCK);
@@ -59,7 +58,7 @@ int main(void) {
 		if (uart_rx(&in) && in != MIDI_CLOCK)
 			push(&midi, in);
 		if (uart_tx_ready()) {
-			uint16_t out;
+			int out;
 			if (pop(&clock, &out) || pop(&midi, &out))
 				uart_tx(out);
 		}
