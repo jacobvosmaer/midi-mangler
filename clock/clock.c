@@ -1,10 +1,7 @@
 /* MIDI clock merge box */
 #include "pinin.h"
-#include "queue.h"
 #include "uart.h"
-#include <avr/interrupt.h>
 #include <avr/io.h>
-#define nelem(x) (int)(sizeof(x) / sizeof(*(x)))
 #define min(x, y) ((x) < (y) ? (x) : (y))
 #define max(x, y) ((x) > (y) ? (x) : (y))
 /* MIDI clock is 24 PPQN. the formula below calculates the number of prescaled
@@ -13,40 +10,38 @@
 #define fTimer1 (F_CPU / 64)
 int bpmticks(int n) { return (fTimer1 / 2 * 5) / n; }
 #define MIDI_CLOCK 0xf8
-struct queue clock, midi, compare;
-ISR(TIMER1_COMPA_vect) {
-	int newcompare;
-	while (pop(&compare, &newcompare))
-		OCR1A = newcompare;
-	push(&clock, MIDI_CLOCK);
-}
 int main(void) {
 	struct encoder encoder = ENCODER(D, 0, D, 1);
-	uint8_t time = 0;
-	int bpm = 120;
+	uint8_t tick = 0;
+	uint16_t lastslow = 0;
+	int bpm = 131, newbpm = bpm;
 	uart_init();
-	TCCR0B = 1 << CS02 | 1 << CS00; /* Timer0 prescaler 1024 */
 	encoder_init(&encoder);
 	TCCR1B = 1 << CS11 | 1 << CS10; /* Timer1 prescaler 64 */
 	TCCR1B |= 1 << WGM12;		/* CTC mode */
 	OCR1A = bpmticks(bpm);
-	TIMSK1 = 1 << OCIE1A;
-	sei();
 	while (1) {
-		uint8_t delta = TCNT0 - time, in;
-		int dir = encoder_debounce(&encoder, delta);
-		time += delta;
-		if (dir) {
-			bpm += dir;
-			bpm = max(min(bpm, 300), 30);
-			push(&compare, bpmticks(bpm));
+		if (TIFR1 & 1 << OCF1A) {
+			TIFR1 |= 1 << OCF1A;
+			tick = 1;
+			if (bpm != newbpm) {
+				bpm = newbpm;
+				OCR1A = bpmticks(bpm);
+			}
 		}
-		if (uart_rx(&in) && in != MIDI_CLOCK)
-			push(&midi, in);
 		if (uart_tx_ready()) {
-			int out;
-			if (pop(&clock, &out) || pop(&midi, &out))
-				uart_tx(out);
+			uint8_t b;
+			if (tick) {
+				tick = 0;
+				uart_tx(MIDI_CLOCK);
+			} else if (uart_rx(&b) && b != MIDI_CLOCK) {
+				uart_tx(b);
+			}
+		}
+		if (TCNT1 - lastslow >= fTimer1 / 1000) {
+			lastslow = TCNT1;
+			newbpm += encoder_debounce(&encoder, 1);
+			newbpm = max(min(newbpm, 300), 30);
 		}
 	}
 }

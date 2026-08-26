@@ -1,4 +1,4 @@
 PRG = clock
-OBJ = uart.o pinin.o queue.o
+OBJ = uart.o pinin.o
 BASEDIR = ..
 include $(BASEDIR)/base.mk
