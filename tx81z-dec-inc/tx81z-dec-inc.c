@@ -1,3 +1,4 @@
+#include "encoder.h"
 #include "midi.h"
 #include "pin.h"
 #include "uart.h"
@@ -7,34 +8,6 @@
 #define nelem(x) (int)(sizeof(x) / sizeof(*(x)))
 
 pin yellow = {&PORTB, &DDRB, PORTB0}, green = {&PORTD, &DDRD, PORTB5};
-
-struct {
-	volatile uint8_t *const port, *const ddr, *const pin;
-	uint8_t bit[2], debounce[2], elapsed;
-} encoder = {&PORTD, &DDRD, &PIND, {PORTD0, PORTD1}, {0}, 0};
-
-void encoder_init(void) {
-	uint8_t mask = (1 << encoder.bit[0]) | (1 << encoder.bit[1]);
-	*encoder.ddr &= ~mask;
-	*encoder.port |= mask;
-}
-
-int encoder_debounce(uint8_t delta) {
-	int i, a, b;
-
-	encoder.elapsed += delta;
-	if (encoder.elapsed < 16)
-		return 0;
-	encoder.elapsed = 0;
-
-	for (i = 0; i < nelem(encoder.debounce); i++)
-		encoder.debounce[i] = (encoder.debounce[i] << 1) |
-				      !!(*encoder.pin & (1 << encoder.bit[i]));
-
-	a = encoder.debounce[0] & 3;
-	b = encoder.debounce[1] & 3;
-	return (a == 1 && b == 0) - (a == 2 && b == 0);
-}
 
 void timer_init(void) {
 	/* Run Timer0 at F_CPU/1024 Hz */
@@ -63,15 +36,16 @@ void tx81zparameter(int dir) {
 
 int main(void) {
 	uint8_t time = 0;
+	struct encoder encoder;
 	uart_init();
 	timer_init();
-	encoder_init();
+	encoderinit(&encoder);
 	pin_init(&yellow);
 	pin_init(&green);
 
 	while (1) {
 		uint8_t delta = TCNT0 - time;
 		time += delta;
-		tx81zparameter(encoder_debounce(delta));
+		tx81zparameter(encoderupdate(&encoder));
 	}
 }

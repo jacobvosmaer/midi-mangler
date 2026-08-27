@@ -1,4 +1,5 @@
 /* MIDI fun box */
+#include "encoder.h"
 #include "midi.h"
 #include "pinin.h"
 #include "uart.h"
@@ -137,12 +138,12 @@ struct {
 };
 uint8_t mode = nelem(modes); /* echo mode */
 int main(void) {
-	struct encoder encoder = ENCODER(D, 0, D, 1);
+	struct encoder encoder;
 	midi_parser mp = {0};
 	uint8_t time = 0, midi_byte;
 	uart_init();
 	timer_init();
-	encoder_init(&encoder);
+	encoderinit(&encoder);
 	button_init();
 	while (1) {
 		uint8_t delta = TCNT0 - time;
@@ -152,7 +153,7 @@ int main(void) {
 			if (uart_rx(&midi_byte))
 				uart_tx(midi_byte);
 		} else {
-			int dir = encoder_debounce(&encoder, delta);
+			int dir = encoderupdate(&encoder);
 			if (dir)
 				modes[mode].encoder(dir);
 			if (uart_rx(&midi_byte))
