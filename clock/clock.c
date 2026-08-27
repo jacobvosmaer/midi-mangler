@@ -1,5 +1,5 @@
 /* MIDI clock merge box */
-#include "pinin.h"
+#include "encoder.h"
 #include "uart.h"
 #include <avr/io.h>
 #define min(x, y) ((x) < (y) ? (x) : (y))
@@ -11,16 +11,17 @@
 int bpmticks(int n) { return (fTimer1 / 2 * 5) / n; }
 #define MIDI_CLOCK 0xf8
 int main(void) {
-	struct encoder encoder = ENCODER(D, 0, D, 1);
 	uint8_t tick = 0;
-	uint16_t lastslow = 0;
 	int bpm = 131, newbpm = bpm;
+	struct encoder encoder;
 	uart_init();
-	encoder_init(&encoder);
 	TCCR1B = 1 << CS11 | 1 << CS10; /* Timer1 prescaler 64 */
 	TCCR1B |= 1 << WGM12;		/* CTC mode */
 	OCR1A = bpmticks(bpm);
+	encoderinit(&encoder);
 	while (1) {
+		newbpm += encoderupdate(&encoder);
+		newbpm = max(min(newbpm, 300), 30);
 		if (TIFR1 & 1 << OCF1A) {
 			TIFR1 |= 1 << OCF1A;
 			tick = 1;
@@ -37,11 +38,6 @@ int main(void) {
 			} else if (uart_rx(&b) && b != MIDI_CLOCK) {
 				uart_tx(b);
 			}
-		}
-		if (TCNT1 - lastslow >= fTimer1 / 1000) {
-			lastslow = TCNT1;
-			newbpm += encoder_debounce(&encoder, 1);
-			newbpm = max(min(newbpm, 300), 30);
 		}
 	}
 }
