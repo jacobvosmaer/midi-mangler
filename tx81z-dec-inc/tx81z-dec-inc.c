@@ -1,13 +1,10 @@
 #include "encoder.h"
 #include "midi.h"
-#include "pin.h"
 #include "uart.h"
 #include <avr/io.h>
 #include <util/delay.h>
 
 #define nelem(x) (int)(sizeof(x) / sizeof(*(x)))
-
-pin yellow = {&PORTB, &DDRB, PORTB0}, green = {&PORTD, &DDRD, PORTB5};
 
 void timer_init(void) {
 	/* Run Timer0 at F_CPU/1024 Hz */
@@ -40,8 +37,6 @@ int main(void) {
 	uart_init();
 	timer_init();
 	encoderinit(&encoder);
-	pin_init(&yellow);
-	pin_init(&green);
 
 	while (1) {
 		uint8_t delta = TCNT0 - time;
