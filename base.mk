@@ -6,7 +6,8 @@ CPPFLAGS = -I$(BASEDIR)/midiparser -I$(BASEDIR)/lib -DF_CPU=16000000L
 CFLAGS = -std=gnu89 -Os -flto -Wall -Wextra -Werror -pedantic
 TARGET_ARCH = -mmcu=atmega32u4
 
-all: $(PRG).lst
+all: $(PRG).lst $(PRG).hex
+	wc -c $(PRG).hex
 
 $(PRG): $(OBJ)
 
