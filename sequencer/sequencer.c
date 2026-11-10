@@ -3,11 +3,11 @@
 #include "midi.h"
 #include "uart.h"
 #define nelem(x) (sizeof(x) / sizeof(*(x)))
-uint8_t sequence[128];
-uint8_t nsequence;
-struct encoder encoder;
-midi_parser parser;
 int main(void) {
+	uint8_t sequence[128];
+	uint8_t nsequence = 0;
+	struct encoder encoder;
+	midi_parser parser = {0};
 	uint8_t loading = 0, midichannel = 0, isequence = 0, gate = 0;
 	uart_init();
 	encoderinit(&encoder);
