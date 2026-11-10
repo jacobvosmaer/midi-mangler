@@ -4,11 +4,10 @@
 #include "uart.h"
 #define nelem(x) (sizeof(x) / sizeof(*(x)))
 int main(void) {
-	uint8_t sequence[128];
-	uint8_t nsequence = 0;
+	uint8_t sequence[128], nsequence = 0, isequence, loading = 0,
+			       midichannel = 0, gate = 0;
 	struct encoder encoder;
 	midi_parser parser = {0};
-	uint8_t loading = 0, midichannel = 0, isequence = 0, gate = 0;
 	uart_init();
 	encoderinit(&encoder);
 	while (1) {
