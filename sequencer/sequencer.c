@@ -34,7 +34,9 @@ loop:
 					isequence = 0;
 			}
 			if (status == MIDI_NOTE_ON && msg.data[1]) {
-				uart_tx(sequence[isequence]);
+				uart_tx(
+				    (sequence[isequence] + msg.data[0] - 60) %
+				    128);
 				uart_tx(msg.data[1]);
 				gate = 1;
 			}
