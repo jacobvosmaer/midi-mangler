@@ -1,5 +1,6 @@
 /* MIDI sequencer */
 #include "encoder.h"
+#include "led.h"
 #include "midi.h"
 #include "uart.h"
 #define nelem(x) (sizeof(x) / sizeof(*(x)))
@@ -10,13 +11,17 @@ int main(void) {
 	midi_parser parser = {0};
 	uart_init();
 	encoderinit(&encoder);
+	ledinit();
 loop:
 	if (encoderupdate(&encoder)) {
 		if (!nsequence) {
 			loading = 1;
+			ledyellow(1);
 		} else {
 			loading = 0;
 			isequence = 0;
+			ledyellow(0);
+			ledgreen(1);
 			uart_tx(MIDI_NOTE_ON | midichannel);
 		}
 	}
