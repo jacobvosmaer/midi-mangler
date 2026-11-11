@@ -6,5 +6,4 @@
 *.map
 *.o
 *.srec
-bintoh
-mmangler
+
