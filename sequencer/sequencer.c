@@ -11,6 +11,15 @@ int main(void) {
 	uart_init();
 	encoderinit(&encoder);
 loop:
+	if (encoderupdate(&encoder)) {
+		if (!nsequence) {
+			loading = 1;
+		} else {
+			loading = 0;
+			isequence = 0;
+			uart_tx(MIDI_NOTE_ON | midichannel);
+		}
+	}
 	if (uart_rx(&b)) {
 		midi_message msg = midi_read(&parser, b);
 		if (!nsequence || loading)
@@ -40,15 +49,6 @@ loop:
 				uart_tx(msg.data[1]);
 				gate = 1;
 			}
-		}
-	}
-	if (encoderupdate(&encoder)) {
-		if (!nsequence) {
-			loading = 1;
-		} else {
-			loading = 0;
-			isequence = 0;
-			uart_tx(MIDI_NOTE_ON | midichannel);
 		}
 	}
 	goto loop;
